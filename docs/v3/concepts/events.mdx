@@ -99,6 +99,18 @@ The default trigger configuration fires every time it sees an event with a match
 Advanced configuration is possible through [custom event triggers](/v3/concepts/event-triggers/).
 
 
+## Server-side behavior
+
+### Event size limits
+
+Events larger than `PREFECT_EVENTS_MAXIMUM_SIZE_BYTES` are not published and are silently dropped with a logged warning by the event publisher. Callers sending oversized events will not receive an API-level error; the events are simply discarded.
+
+### WebSocket event streaming
+
+The `WS /api/events/out` endpoint uses per-subscriber queues with a limited backlog (`SUBSCRIPTION_BACKLOG=256`). If a subscriber's queue is full, subsequent events are dropped for that subscriber rather than blocking or closing the connection. Slow subscribers can lose events without notification.
+
+The first client message after authentication must be a `filter` message (with `{"type": "filter", ...}`). Any other initial message will cause the server to close the WebSocket connection with a protocol error (`WS_1002_PROTOCOL_ERROR`).
+
 ## Further reading
 
 - [How to create automations](/v3/how-to-guides/automations/creating-automations/)
