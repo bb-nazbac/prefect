@@ -93,3 +93,9 @@ import { CLI } from "/snippets/resource-management/cli.mdx"
 import { TF } from "/snippets/resource-management/terraform.mdx"
 
 <TF name="variables" href={variables.tf} />
+
+## Server-side behavior
+
+### Variable creation is not an upsert
+
+`POST /api/variables` is create-only: attempting to create a variable with a name that already exists returns HTTP 409 Conflict rather than overwriting the existing variable. To update an existing variable, use the PATCH endpoint or the SDK's `Variable.set(..., overwrite=True)` convenience method, which handles the create-or-update logic client-side.
