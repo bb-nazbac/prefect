@@ -152,16 +152,28 @@ Only limits with `active=true` are considered when acquiring slots. Inactive lim
 
 Concurrency limit names that do not exist are silently ignored during acquisition. Callers must inspect the response to determine which limits actually participated.
 
+### All-or-nothing multi-limit acquisition
+
+Acquiring slots across multiple named limits is atomic: the request succeeds only if all active limits can accept the requested slots. If any active limit cannot accommodate the requested number of slots, no `active_slots` are incremented on any limit and `denied_slots` are incremented for the active limits included in the request.
+
 ### Denied slots tracking
 
-When slot acquisition fails, the server increments `denied_slots` on the active limits in the request. This counter affects subsequent `Retry-After` calculations and decays over time. It is persisted even on failed acquisition attempts.
+When slot acquisition fails, the server increments `denied_slots` on the active limits in the request. The `denied_slots` counter decays over time according to the limit's average slot occupancy and server settings, and influences subsequent `Retry-After` calculations. This counter is persisted even on failed acquisition attempts.
+
+### Partial updates and occupancy interaction
+
+PATCH updates to concurrency limits are partial (only explicitly set fields are applied). Setting `avg_slot_occupancy_seconds` directly interacts with the weighted-average calculation used by the server when `occupancy_seconds` are reported during slot decrement. Clients should be aware of this interaction when updating limits.
 
 ### Lease duration bounds
 
-The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and enforces a range of 60–86400 seconds. Callers should not assume server-wide lease defaults apply to this endpoint.
+The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and accepts values as low as 45 seconds (up to 86400 seconds). However, the `renew` endpoint requires a minimum of 60 seconds. Clients should avoid creating leases shorter than 60 seconds if they plan to renew them, as the renewal request will be rejected.
 
 ### Idempotent lease release
 
-The `decrement-with-lease` endpoint is idempotent: calling it with a missing or already-revoked `lease_id` returns `204 No Content` and performs no slot changes.
+The `decrement-with-lease` endpoint is idempotent: calling it with a missing or already-revoked `lease_id` returns `204 No Content` and performs no slot changes. When a valid lease is found, the server computes `occupancy_seconds` from the lease's `created_at` timestamp and revokes the lease after decrementing slots.
+
+### Decrement with non-existent limit names
+
+Decrement requests referencing limit names that do not exist are treated as no-ops and return an empty response rather than an error.
 
 For practical implementation examples, see [how to apply global concurrency and rate limits](/v3/how-to-guides/workflows/global-concurrency-limits).
