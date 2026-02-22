@@ -31,7 +31,7 @@ Names must adhere to these traditional variable naming conventions:
 - Only contain lowercase alphanumeric characters ([a-z], [0-9]) or underscores (_). Spaces are not allowed.
 - Be unique
 
-Values must have less than or equal to 5000 characters.
+Values must have less than or equal to 5000 characters. This limit is enforced on the JSON-serialized byte length of the value (using `orjson.dumps`), not on the raw input string character count.
 
 Optionally, you can add tags to a variable.
 
