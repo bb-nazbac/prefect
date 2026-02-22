@@ -40,6 +40,17 @@ Prefect uses [Alembic](https://alembic.sqlalchemy.org/en/latest/) to manage data
 
 When you start a Prefect server, it automatically runs any necessary migrations. You can also manage migrations manually using the CLI.
 
+## Error handling
+
+The server classifies certain database exceptions as client-retryable and returns `503 Service Unavailable` for them. The full set of retryable exceptions includes:
+
+- SQLite: `SQLITE_BUSY`, `SQLITE_BUSY_SNAPSHOT`
+- PostgreSQL (asyncpg): `QueryCanceledError`, `ConnectionDoesNotExistError`, `CannotConnectNowError`
+- SQLAlchemy: `DBAPIError`, `InvalidRequestError`
+- SQLAlchemy ORM: `DetachedInstanceError`
+
+All other unhandled exceptions return `500 Internal Server Error`.
+
 ## How to guides
 
 - [Self-host via CLI](/v3/how-to-guides/self-hosted/server-cli) - Start a local server instance
