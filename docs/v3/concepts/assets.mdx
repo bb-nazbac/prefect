@@ -10,6 +10,7 @@ Assets in Prefect represent any outcome or output of your Prefect workflows. The
 ## Core concepts
 
 An asset is fundamentally defined by its **key**, a URI that uniquely identifies an asset, often specifying an external storage system in which that asset lives. 
+Asset keys are validated by first checking for restricted characters (such as whitespace, `#`, `?`, `&`, `%`, quotes, angle brackets, brackets, braces, `|`, `\`, `^`, and backticks), then enforcing a maximum length of 512 characters, and finally validating that the key conforms to URI format (e.g., `s3://bucket/path`).
 Asset keys serve as both identifiers and organizational structures—assets are automatically grouped by their URI scheme (e.g., `s3://`, `postgres://`, `snowflake://`) and can be hierarchically organized based on their path structure.
 
 Assets exist in three primary states within Prefect:
