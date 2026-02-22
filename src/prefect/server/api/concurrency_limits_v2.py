@@ -321,7 +321,7 @@ async def bulk_increment_active_slots_with_lease(
     mode: Literal["concurrency", "rate_limit"] = Body("concurrency"),
     lease_duration: float = Body(
         300,  # 5 minutes
-        ge=60,  # 1 minute
+        ge=45,  # 45 seconds
         le=60 * 60 * 24,  # 1 day
         description="The duration of the lease in seconds.",
     ),

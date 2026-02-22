@@ -267,11 +267,6 @@ class DeploymentCreate(ActionBaseModel):
         values["parameters"] = validate_parameters_conform_to_schema(
             values.get("parameters", {}), values
         )
-        schema = validate_parameter_openapi_schema(
-            values.get("parameter_openapi_schema"), values
-        )
-        if schema is not None:
-            values["parameter_openapi_schema"] = schema
         return values
 
     @model_validator(mode="before")
