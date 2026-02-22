@@ -47,7 +47,7 @@ and then pass it to `create_markdown_artifact()` to create the artifact.
 
 ### Artifact keys and ArtifactCollection
 
-When an artifact is created with a non-null `key`, the server automatically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
+When an artifact is created with a non-null `key`, the server atomically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. The server enforces that `ArtifactCollection.latest_id` points to the newly created artifact, raising an error if the collection row is not correctly updated. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
 
 Artifacts created without a key are stored only in the `Artifact` table and will not appear in `/artifacts/latest` results, because they are not tracked in `ArtifactCollection`.
 
