@@ -73,8 +73,9 @@ Here are some common state transitions and what they mean:
 
 ## Final state determination
 
-The final state of a flow or task run depends on a number of factors; generally speaking there are three categories of terminal states:
+The final state of a flow or task run depends on a number of factors; generally speaking there are four categories of terminal states:
 - `COMPLETED`: a run in any `COMPLETED` state did not encounter any errors or exceptions and returned successfully
+- `CANCELLED`: a run in any `CANCELLED` state did not complete because a user determined that it should not
 - `FAILED`: a run in any `FAILED` state encountered an error during execution, such as a raised exception
 - `CRASHED`: a run in any `CRASHED` state was interrupted by an OS signal such as a `KeyboardInterrupt` or `SIGTERM`
 
