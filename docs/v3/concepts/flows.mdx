@@ -431,9 +431,21 @@ Bulk deleting flows will also hard-delete all associated deployments and their r
 
 If an `idempotency_key` is supplied when creating a flow run, the server will use it to prevent duplicate flow runs and return the existing run instead of creating a new one. This is useful for ensuring that retried or duplicated API calls do not create unintended duplicate runs.
 
+### Flow creation idempotency
+
+Creating a flow is idempotent by name: the server performs an `INSERT ... ON CONFLICT DO NOTHING` upsert. If a flow with the provided name already exists, the existing flow is returned unchanged and any fields submitted in the request (such as tags or labels) are silently ignored rather than applied as an update.
+
 ### Concurrency slot cleanup on deletion
 
 Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+
+### Bulk set state is non-atomic
+
+Bulk set state processes flow runs sequentially, opening a separate transactional session with row-level locking for each run. The operation is not atomic: individual failures are captured and returned as `ABORT` results rather than causing the entire request to fail. Callers receive a mixed result list and must inspect individual entries to determine per-run outcomes.
+
+### State transition orchestration
+
+Setting a flow run state invokes orchestration rules compiled from flow and global policies for the intended transition. These rules can alter, reject, or transform the requested state, so the resulting state may differ from the one requested. When `force=True` is set, a minimal policy is used to bypass the richer orchestration rules and apply the state more directly.
 
 ### Custom named states
 
