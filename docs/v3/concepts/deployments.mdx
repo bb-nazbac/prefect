@@ -260,8 +260,8 @@ deployment can be active at once. To enable this behavior, deployments have the 
     - `ENQUEUE`: new runs transition to `AwaitingConcurrencySlot` and execute as slots become available.
     - `CANCEL_NEW`: new runs are canceled until a slot becomes available.
   - **`grace_period_seconds`**: the time in seconds to allow infrastructure to start before the concurrency
-  slot is released. This is useful for deployments with slow-starting infrastructure.  Must be between 30 and
-    86400 seconds.If not set, falls back to the server setting (default 300 seconds / 5 minutes).
+  slot is released. This is useful for deployments with slow-starting infrastructure. Must be between 30 and
+  86400 seconds. If not set, falls back to the server setting (default 300 seconds / 5 minutes).
 
 <CodeGroup>
 
