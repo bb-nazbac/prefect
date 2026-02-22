@@ -162,6 +162,60 @@ in waterfall fashion.
     Unpausing a work queue gives the work queue a `NOT_READY` status unless a worker has polled it in the last 60 seconds.
 </Tip>
 
+## Server-side behavior
+
+### Default queue on pool creation
+
+Creating a work pool automatically creates a `default` work queue and assigns it as the pool's `default_queue_id`. This implicit resource creation happens as part of pool creation.
+
+### Work pool status on creation
+
+On creation, non-agent work pools are assigned `PAUSED` status if `is_paused` is true, or `NOT_READY` otherwise. Prefect-agent type pools do not return a status in responses.
+
+### Base job template validation
+
+Default values in a work pool's `base_job_template` are validated during creation, and any `$ref` block references are resolved. If a referenced block document cannot be found, the server returns HTTP 404.
+
+### Reserved work pool names
+
+Work pools whose names start with `Prefect` are reserved and may only be updated to change `is_paused` or `concurrency_limit`. Attempts to update other fields on reserved pools are rejected with HTTP 403.
+
+### Status on unpausing a work pool
+
+Unpausing a work pool sets its status to `READY` only if at least one worker is currently `ONLINE`. Otherwise, the status becomes `NOT_READY`.
+
+### Polling all queues by default
+
+When polling for scheduled flow runs, omitting `work_queue_names` signals the server to operate on all queues in the work pool. Internally, `work_queue_ids` is set to `null` (rather than an empty list) to indicate "all queues" semantics.
+
+### Side effects of polling for scheduled runs
+
+Polling for scheduled flow runs records queue polls and schedules background tasks that update work queue `last_polled` and status, and mark associated deployments as `READY`, emitting status events asynchronously.
+
+### Queue priority auto-assignment
+
+When a queue's priority is omitted during creation, the server auto-assigns the first unused positive rank (filling the first gap in existing priorities) or `max + 1`, placing new queues at the lowest priority by default.
+
+### Default agent pool for queues without a pool
+
+Creating a work queue without specifying a `work_pool_id` will use or create the default agent pool (`default-agent-pool`). Requesting the `default` queue name may return the pool's precreated default queue.
+
+### Work queue pause and unpause status
+
+Pausing a queue sets its status to `PAUSED` only when it was not already paused. Unpausing sets status to `NOT_READY` by default, but will set `READY` if the queue was polled recently (within the health timeout).
+
+### Queue priority rebalancing
+
+Changing a queue's priority may trigger a bulk rebalancing of priorities across the pool, shifting other queues' numeric priorities to maintain unique sequential ordering.
+
+### Default queue deletion protection
+
+A work pool's default queue cannot be deleted. Attempts to delete it will fail with an error indicating the default queue is protected.
+
+### Worker heartbeat upsert
+
+Posting a worker heartbeat will create the worker record if it does not already exist (upsert keyed by work pool ID and worker name) and update `last_heartbeat_time` and status to `ONLINE`. The `heartbeat_interval_seconds` field may also be updated if provided.
+
 ## Further reading
 
 * Learn more about [workers](/v3/deploy/infrastructure-concepts/workers) and how they interact with work pools
