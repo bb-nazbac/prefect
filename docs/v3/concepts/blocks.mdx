@@ -227,6 +227,18 @@ Block document data is encrypted by the server before storage (data-at-rest encr
 
 Data fields of the form `{"$ref": {"block_document_id": <id>}}` are extracted during block document creation and stored as `BlockDocumentReference` records linking parent and child documents. The `$ref` entries are removed from the stored data. If a `$ref` field lacks a `block_document_id`, a `ValueError` is raised.
 
+### Recursive resolution of nested block documents
+
+Querying block documents automatically resolves and inlines referenced block documents. The server performs a recursive fetch using stored `$ref` references and reconstructs the full nested data structure before returning results. This means a single query for a block document that references other block documents will return the complete, fully-hydrated document tree.
+
+### Secret field obfuscation
+
+The `include_secrets` parameter (default `False`) controls whether secret fields are revealed or obfuscated when returning block documents. When `include_secrets` is `False`, the server obfuscates secret field values—including those matched by wildcard secret paths in nested structures—before returning the document. To retrieve actual secret values, callers must explicitly set `include_secrets` to `True`.
+
+### Secret preservation on updates
+
+When updating a block document, if a secret field value matches the obfuscated representation of the current secret, the server assumes the client intended to preserve the existing secret and restores the original value instead of overwriting it with obfuscated text. This protection also applies to wildcard secret paths in nested structures, preventing accidental secret erasure when clients post back obfuscated data.
+
 ### Reference reconciliation on updates
 
 Updating a block document's data reconciles block document references: new references are created, unchanged ones are preserved, and removed references are deleted automatically. This means modifying a block document's data can cause related `BlockDocumentReference` rows to be created or deleted as a side effect.
