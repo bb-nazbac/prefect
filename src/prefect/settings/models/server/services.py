@@ -285,12 +285,12 @@ class ServerServicesSchedulerSettings(ServicesBaseSetting):
     )
 
     loop_seconds: float = Field(
-        default=45,
+        default=60,
         description="""
         The scheduler loop interval, in seconds. This determines
         how often the scheduler will attempt to schedule new flow runs, but has no
         impact on how quickly either flow runs or task runs are actually executed.
-        Defaults to `45`.
+        Defaults to `60`.
         """,
         validation_alias=AliasChoices(
             AliasPath("loop_seconds"),
