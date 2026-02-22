@@ -103,6 +103,8 @@ Workers have two statuses: `ONLINE` and `OFFLINE`. A worker is online if it send
 If a worker misses three heartbeats, it is considered offline. By default, a worker is considered offline a maximum of 90 seconds 
 after it stopped sending heartbeats, but you can configure the threshold with the `PREFECT_WORKER_HEARTBEAT_SECONDS` setting.
 
+Because the worker heartbeat uses upsert semantics (`INSERT ... ON CONFLICT DO UPDATE`), deleting a worker via the API does not permanently remove it. If the worker process is still running, its next heartbeat will recreate the worker record. To permanently remove a worker, stop the worker process first.
+
 ### Worker logs
 <span class="badge cloud"></span> Workers send logs to the Prefect Cloud API if you're connected to Prefect Cloud.
 

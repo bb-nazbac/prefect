@@ -26,6 +26,24 @@ Task tag limits are checked whenever a task run attempts to enter a `Running` st
 
 If there are no concurrency slots available for any one of your task's tags, it delays the transition to a `Running` state and instructs the client to try entering a `Running` state again in 30 seconds (or the value specified by the `PREFECT_TASK_RUN_TAG_CONCURRENCY_SLOT_WAIT_SECONDS` setting).
 
+## Server-side behavior
+
+### Upsert semantics on creation
+
+Creating a tag-based concurrency limit for a tag that already exists updates the existing internal V2 limit (upsert semantics) and returns a V1-format response. No conflict error is returned for duplicate tags.
+
+### Reset behavior with slot override
+
+When resetting a tag via the reset endpoint, providing `slot_override` replaces active slots with long-TTL leases for the specified task run IDs. Omitting `slot_override` clears all slots for that tag.
+
+### Deletion revokes leases
+
+Deleting a tag-based limit revokes all active leases associated with the limit (in batches) before removing the underlying V2 limit. This immediately frees those slots, which may affect currently running task runs that hold them.
+
+### V1 and V2 semantics differ on increment
+
+The increment handler uses lease-backed atomic acquisition for V2 limits but updates in-memory `active_slots` for legacy V1 limits. These two paths have different side-effect and durability semantics—callers should not assume identical behavior between versions.
+
 ## Use cases
 
 Tag-based concurrency limits are useful when you have tasks that interact with shared resources. For example:

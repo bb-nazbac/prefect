@@ -176,6 +176,24 @@ This allows task-level observability and orchestration to narrate your workflow 
 
 For detailed configuration options and implementation guidance, see [how to write and run workflows](/v3/how-to-guides/workflows/write-and-run).
 
+## Server-side behavior
+
+### Task run retry delay validation
+
+The server validates that the list of configured retry delays contains no more than 50 entries. A list exceeding 50 entries will be rejected. The server does not enforce non-negativity on individual delay values.
+
+### Task run creation idempotency
+
+`POST /api/task_runs` will return an existing task run instead of creating a new one if a run with the same `flow_run_id`, `task_key`, and `dynamic_key` already exists. The endpoint performs an idempotent upsert in that case.
+
+### Background log deletion on task run removal
+
+The background log-deletion job scheduled by `DELETE /api/task_runs/{id}` will retry up to 5 times with 0.5-second delays and runs in its own database transaction.
+
+### WebSocket subscription requeue behavior
+
+During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
+
 ## Background tasks
 
 Background tasks are an alternate task execution model where tasks are submitted in a non-blocking manner by one process and executed by a pool of processes. This execution model is particularly valuable for web applications and workflows that need to dispatch heavy or long-running work without waiting for completion to dedicated, horizontally scaled infrastructure.

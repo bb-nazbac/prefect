@@ -138,4 +138,30 @@ Use global concurrency limits for fine-grained control:
 - Create custom queueing behavior for specific operation types
 - Coordinate between multiple flows or applications accessing shared resources
 
+## Server-side behavior
+
+### Deletion does not revoke leases
+
+Deleting a concurrency limit removes the database row but does not revoke existing leases that reference it. Those leases continue to exist until their TTL expires.
+
+### Inactive limits are excluded from acquisition
+
+Only limits with `active=true` are considered when acquiring slots. Inactive limits in the request are silently ignored during acquisition.
+
+### Missing limit names are silently ignored
+
+Concurrency limit names that do not exist are silently ignored during acquisition. Callers must inspect the response to determine which limits actually participated.
+
+### Denied slots tracking
+
+When slot acquisition fails, the server increments `denied_slots` on the active limits in the request. This counter affects subsequent `Retry-After` calculations and decays over time. It is persisted even on failed acquisition attempts.
+
+### Lease duration bounds
+
+The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and enforces a range of 60–86400 seconds. Callers should not assume server-wide lease defaults apply to this endpoint.
+
+### Idempotent lease release
+
+The `decrement-with-lease` endpoint is idempotent: calling it with a missing or already-revoked `lease_id` returns `204 No Content` and performs no slot changes.
+
 For practical implementation examples, see [how to apply global concurrency and rate limits](/v3/how-to-guides/workflows/global-concurrency-limits).

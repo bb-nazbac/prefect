@@ -347,7 +347,7 @@ To do this, a deployment using workers needs the following fields:
 
 - **`work_pool_name`**: the name of the work pool this deployment is associated with.
 Work pool types mirror infrastructure types, which means this field impacts the options available
-for the other fields.
+for the other fields. Note that work pool names starting with "Prefect" (case-insensitive) are reserved and cannot be created via the work pool API, but deployments themselves do not enforce this restriction—a deployment can reference any work pool name.
 - **`work_queue_name`**: if you are using work queues to either manage priority or concurrency, you can
 associate a deployment with a specific queue within a work pool using this field.
 - **`job_variables`**: this field allows deployment authors to customize whatever infrastructure

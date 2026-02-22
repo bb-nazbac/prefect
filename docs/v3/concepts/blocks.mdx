@@ -50,6 +50,8 @@ Cube.register_type_and_schema()
 Users should rarely need to register types in this way - saving a block document will also automatically register its type.
 </Note>
 
+Block schema registration is idempotent by checksum: if a schema with the same fields checksum and version already exists, the server returns the existing schema (HTTP 200) instead of creating a duplicate.
+
 ### Block document
 
 A block _document_ is an instantiation of the schema, or block type. A document contains _specific_ values for each field defined in the schema.
@@ -80,6 +82,12 @@ tiny_cube.save("tiny")
 
 Block documents can also be created and updated in the UI or API for easy change management. 
 This allows you to work with slowly changing configuration without having to redeploy all workflows that rely on it; for example, you may use this to rotate credentials on a regular basis without touching your deployments.
+
+Block document data is encrypted by the server before storage, so data is encrypted at rest rather than stored as plaintext.
+
+When creating or updating a block document, data fields containing block references in the form `{"$ref": {"block_document_id": "<id>"}}` are automatically extracted and stored as block document reference records that link the parent document to the referenced document.
+
+When a block document is updated, its block document references are reconciled automatically: new references are created, unchanged references are preserved, and references that are no longer present in the data are deleted.
 
 ### Block class
 
@@ -142,6 +150,8 @@ Built-in blocks should be registered the first time you start a Prefect server. 
 For example, to register all built-in notification blocks, run `prefect block register -m prefect.blocks.notifications`.
 </Note>
 
+During server startup, Prefect automatically installs a set of protected system block types: **Webhook**, **Secret**, and **LocalFileSystem**. These block types are marked as protected (`is_protected=True`), which means they cannot be deleted via the API. Protected block types can still be updated. The installation uses upsert semantics, so calling the installation endpoint multiple times is idempotent.
+
 ### Blocks in Prefect integration libraries
 
 Some block types that appear in the UI can be created immediately, with the corresponding integration library installed for use.
@@ -196,6 +206,30 @@ If a block type is not available in the UI, you can [register it](#register-bloc
 | SQLAlchemy Connector              | `sqlalchemy-connector`                 | [prefect-sqlalchemy](/integrations/prefect-sqlalchemy/)   |
 
 Anyone can create a custom block type and, optionally, share it with the community.
+
+## Server-side behavior
+
+### Protected block types
+
+Protected block types (those with `is_protected=True`) cannot be _deleted_ via the API. However, updates to protected block types are not blocked by the server—the `is_protected` flag only prevents deletion.
+
+The `install_system_block_types` endpoint registers a predefined set of system block types (Webhook, Secret, LocalFileSystem) as protected and uses upsert semantics, so calling it is idempotent.
+
+### Block schema idempotency
+
+Creating a block schema is idempotent by checksum: if a schema with the same fields checksum and version already exists, the existing schema is returned with HTTP 200 instead of creating a new record (which would return HTTP 201).
+
+### Block document data encryption
+
+Block document data is encrypted by the server before storage (data-at-rest encryption) rather than stored as plaintext.
+
+### Block document references
+
+Data fields of the form `{"$ref": {"block_document_id": <id>}}` are extracted during block document creation and stored as `BlockDocumentReference` records linking parent and child documents. The `$ref` entries are removed from the stored data. If a `$ref` field lacks a `block_document_id`, a `ValueError` is raised.
+
+### Reference reconciliation on updates
+
+Updating a block document's data reconciles block document references: new references are created, unchanged ones are preserved, and removed references are deleted automatically. This means modifying a block document's data can cause related `BlockDocumentReference` rows to be created or deleted as a side effect.
 
 ## Additional resources
 

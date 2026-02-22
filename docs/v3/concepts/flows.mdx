@@ -421,6 +421,20 @@ if __name__ == "__main__":
 
 If a flow run returns any other object, then it is recorded as `COMPLETED`
 
+## Server-side behavior
+
+### Bulk flow deletion
+
+Bulk deleting flows will also hard-delete all associated deployments and their related data. This is a permanent, destructive operation that cannot be undone.
+
+### Flow run idempotency
+
+If an `idempotency_key` is supplied when creating a flow run, the server will use it to prevent duplicate flow runs and return the existing run instead of creating a new one. This is useful for ensuring that retried or duplicated API calls do not create unintended duplicate runs.
+
+### Concurrency slot cleanup on deletion
+
+Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+
 ### Custom named states
 
 You can also create custom named states to provide more granularity in your flow run states.

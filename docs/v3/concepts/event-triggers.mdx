@@ -610,6 +610,10 @@ Sequence triggers are defined as:
 | **within**   | time, in seconds        | How close in time the child triggers must fire for this trigger to fire |
 | **triggers** | array of other triggers |                                                                         |
 
+### Trigger ID behavior
+
+Creating an automation resets all trigger IDs server-side; any client-supplied trigger IDs are discarded and replaced with new server-generated UUIDs. Clients should not expect to control or preserve trigger IDs when creating or updating automations.
+
 ### Support for event trigger types
 
 | Feature                                  | Prefect Open Source | Prefect Cloud |
