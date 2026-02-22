@@ -360,3 +360,21 @@ configuration, and prepares the runtime environment for workflow execution.
 Pull steps allow users to highly decouple their workflow architecture.
 For example, a common use of pull steps is to dynamically pull code from remote filesystems such as
 GitHub with each run of their deployment.
+
+## Server-side behavior
+
+### Work pool validation on creation
+
+When creating or upserting a deployment, the server validates the referenced work pool up front. If a `work_pool_name` is provided that does not match any existing work pool (and is not the default agent work pool), the server rejects creation with HTTP 404. This prevents deployments from being created with references to non-existent work pools.
+
+### Upsert replaces schedules and deletes future auto-scheduled runs
+
+Creating a deployment with the same name and `flow_id` as an existing deployment performs an upsert. As part of this operation, the server deletes future auto-scheduled runs from the previous deployment and replaces its schedules with the new deployment's schedules. This means redeploying a flow will clear any previously auto-scheduled runs that have not yet started.
+
+### Background deployment readiness updates
+
+When runners call the `get_scheduled_flow_runs` endpoint, the server enqueues a background task to mark those deployments as `READY`. This background task updates each deployment's status and `last_polled` timestamp and emits readiness events. These state changes and events are side effects of polling for scheduled runs.
+
+### Bulk flow run creation may create work queues
+
+When bulk-creating flow runs from a deployment, if any run specifies a `work_queue_name` that differs from the deployment's default and the deployment's work pool exists, the server creates the work queue if it does not already exist. This create-if-not-found behavior prevents race conditions when multiple runs reference the same new queue name.
