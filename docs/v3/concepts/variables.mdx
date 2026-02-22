@@ -28,10 +28,10 @@ Create, read, edit, and delete variables through the Prefect UI, Python SDK, API
 Names must adhere to these traditional variable naming conventions:
 
 - Have no more than 255 characters
-- Only contain lowercase alphanumeric characters ([a-z], [0-9]) or underscores (_). Spaces are not allowed.
+- Only contain lowercase alphanumeric characters ([a-z], [0-9]), dashes (-), or underscores (_). Spaces are not allowed. Certain characters (/, %, &, >, <) are explicitly banned.
 - Be unique
 
-Values must have less than or equal to 5000 characters. This limit is enforced on the JSON-serialized byte length of the value (using `orjson.dumps`), not on the raw input string character count.
+Values must be JSON-serializable and have a JSON-serialized byte length (using `orjson.dumps`) of no more than 5000 bytes. Non-serializable values are rejected with a validation error.
 
 Optionally, you can add tags to a variable.
 
@@ -93,3 +93,21 @@ import { CLI } from "/snippets/resource-management/cli.mdx"
 import { TF } from "/snippets/resource-management/terraform.mdx"
 
 <TF name="variables" href={variables.tf} />
+
+## Server-side behavior
+
+### SDK set/aset client-side upsert
+
+`Variable.set` and `Variable.aset` perform a client-side read-then-create-or-update flow, honoring the `overwrite` parameter to avoid create conflicts. A direct `POST /api/variables` call will return HTTP 409 on duplicate names rather than performing an upsert.
+
+### Name filter matching
+
+The variable name filter's `like_` parameter is matched using case-insensitive `ILIKE`, and the server wraps the provided string with `%` on both sides automatically. Callers should not supply their own leading or trailing wildcards.
+
+### Tags filter null check
+
+The variable tags `is_null_` filter checks for an empty tags array (`[]`) rather than SQL `NULL`, because tags are stored as a JSON array with a default empty list.
+
+### Renaming variables via update
+
+`PATCH /api/variables/{id}` and `PATCH /api/variables/name/{name}` accept an optional `name` field in the body, allowing the variable to be renamed. Renaming to a name that already exists may result in a database integrity error. Callers should check for name collisions beforehand or handle conflict responses.
