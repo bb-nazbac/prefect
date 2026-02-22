@@ -50,6 +50,8 @@ Cube.register_type_and_schema()
 Users should rarely need to register types in this way - saving a block document will also automatically register its type.
 </Note>
 
+Block schema registration is idempotent by checksum: if a schema with the same fields checksum and version already exists, the server returns the existing schema (HTTP 200) instead of creating a duplicate.
+
 ### Block document
 
 A block _document_ is an instantiation of the schema, or block type. A document contains _specific_ values for each field defined in the schema.
