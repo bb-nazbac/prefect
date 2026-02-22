@@ -184,15 +184,23 @@ The server validates that the list of configured retry delays contains no more t
 
 ### Task run creation idempotency
 
-`POST /api/task_runs` will return an existing task run instead of creating a new one if a run with the same `flow_run_id`, `task_key`, and `dynamic_key` already exists. The endpoint performs an idempotent upsert in that case.
+`POST /api/task_runs` applies different idempotency rules depending on whether `flow_run_id` is provided. When `flow_run_id` is set, the server performs a database-level upsert keyed on (`flow_run_id`, `task_key`, `dynamic_key`) and returns the existing run if one matches. When `flow_run_id` is absent (ad-hoc task runs), the server uses application-level logic to query and potentially insert based on (`task_key`, `dynamic_key`). In both cases, duplicate runs are prevented, but the underlying mechanisms differ.
 
 ### Background log deletion on task run removal
 
 The background log-deletion job scheduled by `DELETE /api/task_runs/{id}` will retry up to 5 times with 0.5-second delays and runs in its own database transaction.
 
-### WebSocket subscription requeue behavior
+### State transition orchestration
 
-During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
+`POST /api/task_runs/{id}/set_state` applies orchestration rules to proposed state transitions by default. The server compiles rules from task and global policies, which can alter, reject, or transform the requested state. Setting `force=True` bypasses most orchestration rules and uses a minimal policy to allow more direct state writes.
+
+### Cache retrieval on state transitions
+
+When a proposed state includes a `cache_key`, the server's cache retrieval orchestration rule checks for a valid cached `COMPLETED` state matching that key. If a matching, non-expired cache entry is found and `state_details.refresh_cache` is not set, the server rejects the `RUNNING` transition and returns the cached completed state (named `Cached`) instead. Set `refresh_cache` in `state_details` to force bypassing cache retrieval.
+
+### WebSocket subscription protocol
+
+The `WS /api/task_runs/subscriptions/scheduled` endpoint uses a custom protocol: clients must send an initial `subscribe` message with `type: "subscribe"`, `keys`, and `client_id`. After the server dispatches a task run, the client must reply with an `ack` message (or `quit` to disconnect gracefully). If a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
 
 ## Background tasks
 
