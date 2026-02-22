@@ -162,6 +162,28 @@ in waterfall fashion.
     Unpausing a work queue gives the work queue a `NOT_READY` status unless a worker has polled it in the last 60 seconds.
 </Tip>
 
+## Server-side behavior
+
+### Reserved pool update restrictions
+
+Work pools whose names start with `Prefect` are reserved for internal use. These pools may only be updated to change `is_paused` or `concurrency_limit`; attempts to update other fields return HTTP 403 Forbidden.
+
+### Pause and unpause status transitions
+
+When a pool's `is_paused` flag is changed, the pool's status is updated automatically. Pausing a pool sets its status to `PAUSED`. Unpausing sets the status to `READY` if any workers are currently online, or `NOT_READY` otherwise. These status changes also update `last_status_event_id` and `last_transitioned_status_at`.
+
+### Polling triggers background state updates
+
+Fetching scheduled runs from a work pool causes side effects: the server records which queues were polled (updating `last_polled` and status) and enqueues background tasks to mark queues and related deployments as ready. These background tasks can change queue and deployment states and emit events.
+
+### Default queue cannot be deleted
+
+A work pool's default queue cannot be deleted. Attempting to do so results in an error indicating the default queue is protected, because the pool maintains a foreign-key reference to its default queue.
+
+### Worker heartbeat upsert
+
+Sending a heartbeat upserts the worker record, creating it if it does not already exist. The heartbeat marks the worker as `ONLINE`, updates `last_heartbeat_time`, and can update `heartbeat_interval_seconds` if provided.
+
 ## Further reading
 
 * Learn more about [workers](/v3/deploy/infrastructure-concepts/workers) and how they interact with work pools
