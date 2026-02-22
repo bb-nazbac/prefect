@@ -151,7 +151,7 @@ class Deployment:
     concurrency_limit: int | None = None
     concurrency_options: ConcurrencyOptions(
         collision_strategy=Literal['ENQUEUE', 'CANCEL_NEW'],
-        grace_period_seconds=int  # 60-86400, default 300
+        grace_period_seconds=int  # 30-86400, default 300
     ) | None = None
 
     # metadata for bookkeeping
@@ -260,8 +260,8 @@ deployment can be active at once. To enable this behavior, deployments have the 
     - `ENQUEUE`: new runs transition to `AwaitingConcurrencySlot` and execute as slots become available.
     - `CANCEL_NEW`: new runs are canceled until a slot becomes available.
   - **`grace_period_seconds`**: the time in seconds to allow infrastructure to start before the concurrency
-  slot is released. This is useful for deployments with slow-starting infrastructure. Must be between 60 and
-  86400 seconds. If not set, falls back to the server setting (default 300 seconds / 5 minutes).
+  slot is released. This is useful for deployments with slow-starting infrastructure.  Must be between 30 and
+    86400 seconds.If not set, falls back to the server setting (default 300 seconds / 5 minutes).
 
 <CodeGroup>
 
@@ -360,3 +360,57 @@ configuration, and prepares the runtime environment for workflow execution.
 Pull steps allow users to highly decouple their workflow architecture.
 For example, a common use of pull steps is to dynamically pull code from remote filesystems such as
 GitHub with each run of their deployment.
+
+## Server-side behavior
+
+### Upsert semantics on deployment creation
+
+`POST /api/deployments` performs an upsert: if a deployment with the same `flow_id` and `name` already exists, it is updated rather than rejected. During this upsert, existing deployment schedules and their auto-scheduled future runs are deleted and recreated to reflect the new configuration.
+
+### Work pool and queue resolution
+
+When creating a deployment, supplying `work_pool_name` and/or `work_queue_name` causes the API to resolve the corresponding resource IDs. If only a work pool name is supplied, the pool's default queue is used. The API may auto-create a work queue if the specified queue does not yet exist.
+
+### Schedule update semantics
+
+When updating deployment schedules, the server uses schedule slugs to perform targeted updates. If existing schedules have slugs, all provided schedules in the update must also include slugs, or the request is rejected (HTTP 422). Schedule renaming uses a two-phase process that temporarily nulls slugs to avoid unique index collisions.
+
+### Parameter hydration on update
+
+Deployment parameter values are hydrated server-side during updates, rendering Jinja templates and workspace variables. If hydration fails, the API returns HTTP 400 with details about the hydration error.
+
+### Deployment readiness on polling
+
+Calling `get_scheduled_flow_runs` triggers an asynchronous background job to mark the queried deployments as `READY` and update their `last_polled` timestamps, emitting deployment status events as a side effect of polling for work.
+
+### Backfill scheduling constraints
+
+Scheduling and backfill generation obeys an ordered constraint evaluation: `start_time`, then `max_runs`, then `end_time`, then ensure at least `min_runs`, and finally ensure runs extend at least `start_time + min_time`. The `min_time` parameter may be provided as seconds (float) and is converted to a timedelta internally.
+
+### Resuming a deployment
+
+Calling `resume_deployment` clears the `paused` flag so the scheduler can immediately schedule runs for the deployment. Runs become eligible right away once the deployment is resumed.
+
+### Pausing a deployment
+
+Pausing a deployment commits the pause immediately and deletes auto-scheduled future runs for that deployment (auto-scheduled runs only; manually created scheduled runs are preserved). The pause is committed mid-transaction to ensure the scheduler sees it before run deletion completes.
+
+### Parameter hydration on flow run creation
+
+When creating a flow run from a deployment, parameters are hydrated server-side by merging deployment and flow run parameters, then rendering Jinja templates and workspace variables. The `enforce_parameter_schema` flag defaults to the deployment's value but can be overridden per-run. Hydration failures produce HTTP 400, and schema validation failures produce HTTP 409 or 422.
+
+### Work queue override on flow run creation
+
+A per-run `work_queue_name` overrides the deployment's queue, but only when the deployment has an associated work pool. The API may auto-create the specified work queue during flow run creation. If the deployment has no work pool, the override is rejected with HTTP 400.
+
+### Bulk flow run creation
+
+Bulk flow run creation enforces a maximum of 100 items per request and returns per-item results. Individual item failures (validation or creation errors) do not abort processing of remaining items. The endpoint may pre-create work queues for items with differing queue names to avoid race conditions.
+
+### Updating a deployment schedule
+
+Updating a deployment schedule deletes auto-scheduled future runs to ensure future runs reflect the latest schedule configuration.
+
+### Deleting a deployment schedule
+
+Deleting a deployment schedule removes auto-scheduled future runs for that deployment, preventing stale scheduled runs from executing.
