@@ -43,4 +43,22 @@ and then pass it to `create_markdown_artifact()` to create the artifact.
 </Note>
 
 
+## Server-side behavior
+
+### Artifact keys and ArtifactCollection
+
+When an artifact is created with a non-null `key`, the server automatically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
+
+Artifacts created without a key are stored only in the `Artifact` table and will not appear in `/artifacts/latest` results, because they are not tracked in `ArtifactCollection`.
+
+The `/artifacts/{key}/latest` endpoint only returns results for keys that were previously set via artifact creation; it depends on the `ArtifactCollection` being populated by the `POST /api/artifacts` endpoint.
+
+### Deleting the latest artifact
+
+Deleting the latest artifact for a key causes the `ArtifactCollection` to roll back its `latest_id` pointer to the next most recent artifact with the same key, ordered by creation time. If no other artifacts exist for that key, the `ArtifactCollection` entry is removed entirely.
+
+### Metadata truncation
+
+Artifact metadata values longer than 500 characters are silently truncated to 500 characters (with `...` appended) rather than rejected.
+
 For more information on how to create and use artifacts, see the [how to produce workflow artifacts](/v3/how-to-guides/workflows/artifacts/) guide.
