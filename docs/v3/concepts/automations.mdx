@@ -103,6 +103,14 @@ The action events include related resources that link back to their source event
 These links help you trace from an action failure back to the specific trigger and original event that caused it.
 
 
+## Server-side behavior
+
+### Trigger ID management
+
+On automation creation, any client-provided trigger IDs are reset to server-generated IDs to prevent ID injection. This means the trigger IDs in the created automation will differ from any IDs supplied in the request.
+
+Full automation updates (via `PUT`) also reset any provided trigger IDs to new server-generated IDs. Clients should not rely on trigger IDs remaining stable across updates.
+
 ## Sending notifications with automations
 
 
