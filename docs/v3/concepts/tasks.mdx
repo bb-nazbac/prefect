@@ -184,15 +184,35 @@ The server validates that the list of configured retry delays contains no more t
 
 ### Task run creation idempotency
 
-`POST /api/task_runs` will return an existing task run instead of creating a new one if a run with the same `flow_run_id`, `task_key`, and `dynamic_key` already exists. The endpoint performs an idempotent upsert in that case.
+`POST /api/task_runs` will return an existing task run instead of creating a new one if a run with the same `flow_run_id`, `task_key`, and `dynamic_key` already exists. The endpoint performs an idempotent upsert in that case. When `flow_run_id` is omitted, deduplication is performed by application logic on `(task_key, dynamic_key)` rather than the database-level upsert used when `flow_run_id` is present.
+
+When a task run is newly created with an attached state, the server immediately creates that state via `set_task_run_state(force=True)` as part of the creation process.
+
+### Log write behavior
+
+Log writes sanitize null bytes from log messages and names to avoid database errors. Logs are inserted in batches and published to the log messaging system. Specific `RuntimeError` exceptions during interpreter shutdown (thread creation failure) are suppressed instead of propagating.
 
 ### Background log deletion on task run removal
 
 The background log-deletion job scheduled by `DELETE /api/task_runs/{id}` will retry up to 5 times with 0.5-second delays and runs in its own database transaction.
 
+### State transition orchestration
+
+Setting a task run state runs orchestration rules by default, which may alter, delay, reject, or transform the proposed transition. Providing `force=True` bypasses orchestration and can result in states being accepted that would otherwise be modified.
+
+State transitions where `state_details.deferred` is `True` are governed by `BackgroundTaskPolicy` (background-task semantics), which modifies allowed transitions and enqueuing behavior compared to the standard task policy.
+
+### Cache retrieval
+
+If a proposed `RUNNING` state includes a `cache_key` and a valid cached `COMPLETED` state exists for that key, the server rejects the `RUNNING` transition and returns the cached `COMPLETED` state instead (unless `refresh_cache` is set to true). This prevents re-execution and supplies cached results directly.
+
+### WebSocket subscription protocol
+
+Scheduled task subscription WebSockets (`WS /api/task_runs/subscriptions/scheduled`) expect an initial `subscribe` message containing `keys` and `client_id`. Missing or malformed subscription messages result in the server closing the socket with a protocol-violation code. Workers are tracked via `observe_worker`/`forget_worker` calls during the subscription lifecycle.
+
 ### WebSocket subscription requeue behavior
 
-During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
+During WebSocket task subscription, if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
 
 ## Background tasks
 
