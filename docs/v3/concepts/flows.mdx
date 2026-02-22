@@ -423,17 +423,33 @@ If a flow run returns any other object, then it is recorded as `COMPLETED`
 
 ## Server-side behavior
 
+### Flow creation upsert semantics
+
+`POST /api/flows` uses create-or-return-existing semantics: if a flow with the same name already exists, the existing flow is returned instead of creating a duplicate. The server returns HTTP 201 only when the flow's `created` timestamp indicates it was created by the current request; otherwise HTTP 200 is returned.
+
 ### Bulk flow deletion
 
-Bulk deleting flows will also hard-delete all associated deployments and their related data. This is a permanent, destructive operation that cannot be undone.
+Bulk deleting flows performs a filtered hard-delete (up to the provided limit) and permanently removes matching flows along with their associated deployments and related data, returning the list of deleted IDs. This is a permanent, destructive operation that cannot be undone.
 
 ### Flow run idempotency
 
 If an `idempotency_key` is supplied when creating a flow run, the server will use it to prevent duplicate flow runs and return the existing run instead of creating a new one. This is useful for ensuring that retried or duplicated API calls do not create unintended duplicate runs.
 
+### Work pool and queue resolution on flow run creation
+
+When creating a flow run via `POST /api/flow_runs`, if `work_pool_name` is provided without `work_queue_name`, the server looks up and assigns the pool's default work queue ID to the new flow run. Providing both resolves the explicit queue ID.
+
 ### Concurrency slot cleanup on deletion
 
-Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. Associated logs are asynchronously queued for deletion via a background job with retries. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+
+### Resuming a flow run
+
+`POST /api/flow_runs/{id}/resume` only resumes runs in a `PAUSED` state; if the run is not paused, the server returns an `ABORT` response. When the paused state includes a `run_input_keyset`, the server hydrates and validates the provided `run_input` against the saved schema, rejecting the resume on hydration or validation errors. A successful resume transitions the run to `Scheduled` (with name "Resuming") when `pause_reschedule` is set, or to `Running` otherwise. Validated run input is stored when the orchestration accepts the transition.
+
+### State transition orchestration
+
+`POST /api/flow_runs/{id}/set_state` runs orchestration logic: proposed state transitions are evaluated by per-run and global orchestration rules, which may alter, reject, or abort the transition. Supplying `force=True` bypasses the normal flow policy and uses a minimal policy instead. The server locks the flow run row during orchestration to avoid race conditions.
 
 ### Custom named states
 
