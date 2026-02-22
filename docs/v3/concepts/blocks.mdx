@@ -83,12 +83,6 @@ tiny_cube.save("tiny")
 Block documents can also be created and updated in the UI or API for easy change management. 
 This allows you to work with slowly changing configuration without having to redeploy all workflows that rely on it; for example, you may use this to rotate credentials on a regular basis without touching your deployments.
 
-Block document data is encrypted by the server before storage, so data is encrypted at rest rather than stored as plaintext.
-
-When creating or updating a block document, data fields containing block references in the form `{"$ref": {"block_document_id": "<id>"}}` are automatically extracted and stored as block document reference records that link the parent document to the referenced document.
-
-When a block document is updated, its block document references are reconciled automatically: new references are created, unchanged references are preserved, and references that are no longer present in the data are deleted.
-
 ### Block class
 
 A block _class_ is the primary user-facing object; it is a Python class whose attributes are loaded from a block document. Most Prefect blocks encapsulate additional functionality built on top of the block document. 
@@ -149,8 +143,6 @@ Built-in blocks should be registered the first time you start a Prefect server. 
 
 For example, to register all built-in notification blocks, run `prefect block register -m prefect.blocks.notifications`.
 </Note>
-
-During server startup, Prefect automatically installs a set of protected system block types: **Webhook**, **Secret**, and **LocalFileSystem**. These block types are marked as protected (`is_protected=True`), which means they cannot be deleted via the API. Protected block types can still be updated. The installation uses upsert semantics, so calling the installation endpoint multiple times is idempotent.
 
 ### Blocks in Prefect integration libraries
 
