@@ -28,7 +28,7 @@ Create, read, edit, and delete variables through the Prefect UI, Python SDK, API
 Names must adhere to these traditional variable naming conventions:
 
 - Have no more than 255 characters
-- Only contain lowercase alphanumeric characters ([a-z], [0-9]) or underscores (_). Spaces are not allowed.
+- Only contain lowercase alphanumeric characters ([a-z], [0-9]), underscores (_), or dashes (-). Spaces are not allowed.
 - Be unique
 
 Values must have less than or equal to 5000 characters. This limit is enforced on the JSON-serialized byte length of the value (using `orjson.dumps`), not on the raw input string character count.
@@ -87,6 +87,12 @@ import { CLI } from "/snippets/resource-management/cli.mdx"
 - `prefect variable unset` deletes a variable.
 - `prefect variable ls` lists all variables.
 - `prefect variable inspect` shows a variable's details.
+
+## Server-side behavior
+
+### Duplicate variable names
+
+Creating a variable with a name that already exists fails with `409 Conflict`. The `POST` endpoint does not perform an upsert and will not overwrite an existing variable. To update an existing variable, use the `PATCH` endpoint or the SDK's `Variable.set()` with `overwrite=True`.
 
 ### Through Terraform
 
