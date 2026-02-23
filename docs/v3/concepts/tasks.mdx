@@ -184,15 +184,54 @@ The server validates that the list of configured retry delays contains no more t
 
 ### Task run creation idempotency
 
-`POST /api/task_runs` will return an existing task run instead of creating a new one if a run with the same `flow_run_id`, `task_key`, and `dynamic_key` already exists. The endpoint performs an idempotent upsert in that case.
+`POST /api/task_runs` is idempotent, but the mechanism differs depending on whether `flow_run_id` is provided:
+
+- **With `flow_run_id`**: The server performs a database-level upsert on `(flow_run_id, task_key, dynamic_key)`. If a matching run exists, it is returned instead of creating a new one.
+- **Without `flow_run_id`**: The server queries for existing rows where `flow_run_id` is `NULL` matching `(task_key, dynamic_key)` at the application level to decide whether to insert.
 
 ### Background log deletion on task run removal
 
 The background log-deletion job scheduled by `DELETE /api/task_runs/{id}` will retry up to 5 times with 0.5-second delays and runs in its own database transaction.
 
-### WebSocket subscription requeue behavior
+### Orchestration policy selection
 
-During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
+`POST /api/task_runs/{id}/set_state` chooses an orchestration policy based on the state and request flags:
+
+- If `state_details.deferred` is `true`, the server uses `BackgroundTaskPolicy`.
+- If `force=True` or no task policy is provided, the server uses `MinimalTaskPolicy`.
+
+The selected policy determines which orchestration rules run, affecting behaviors such as concurrency enforcement, enqueuing, and rule ordering.
+
+### Orchestration result semantics
+
+`POST /api/task_runs/{id}/set_state` returns an `OrchestrationResult` that describes whether the requested state transition was accepted, rejected, aborted, or should wait. The result may include a replacement state or delay instructions. Clients must inspect and handle these outcomes rather than assuming their requested state was persisted.
+
+### Cache retrieval on state transition
+
+When proposing a `Running` state with a `cache_key`, the server checks for an unexpired cached `Completed` state matching that key. If a cached state is found, the `Running` transition is rejected and the cached `Completed` state is returned instead. Set `state_details.refresh_cache=true` to bypass this behavior and force execution.
+
+### Zero concurrency limit behavior
+
+If a task's tag has a concurrency limit set to `0` (either v1 or v2 limits), the server aborts the transition to `Running` immediately rather than delaying. This prevents deadlocks where a task would wait indefinitely for a slot that can never become available. The abort response includes a descriptive reason and the server attempts cleanup of any already-acquired leases.
+
+### Parent flow run state dependency
+
+A task cannot transition to `Running` unless its parent flow run is in the `Running` state:
+
+- If the parent flow run is `Paused`, the task receives a `NotReady` paused state that preserves the flow run's pause timeout and reschedule settings.
+- If the parent flow run is absent or not in a running state, the transition is aborted.
+
+### Terminal state transition restrictions
+
+Completed task runs with persisted results (where `state.data` is not `unpersisted`) cannot leave the `COMPLETED` terminal state; attempts are rejected. Transitions from any terminal state to `CANCELLING`, `PAUSED`, or `CRASHED` are aborted. If a task run does leave a terminal state for a non-terminal state, the server resets the `run_count`.
+
+### WebSocket subscription protocol
+
+The `WS /api/task_runs/subscriptions/scheduled` endpoint enforces a strict protocol:
+
+1. The initial client message must be JSON with `type: 'subscribe'`. Any other initial message is treated as a protocol violation and the connection is closed with code `4001`.
+2. The `subscribe` message must include a non-empty `keys` array and a `client_id` string. Omitting either will close the WebSocket with a protocol violation.
+3. After the server dispatches a task run, the worker must respond with a JSON message with `type: 'ack'`. Sending `type: 'quit'` causes the server to close the connection gracefully. Any other response is treated as a protocol violation, and the task is requeued into the retry queue.
 
 ## Background tasks
 
