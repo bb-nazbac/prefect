@@ -423,6 +423,10 @@ If a flow run returns any other object, then it is recorded as `COMPLETED`
 
 ## Server-side behavior
 
+### Flow creation idempotency
+
+`POST /api/flows` is idempotent by flow name: if a flow with the same name already exists, the existing flow is returned instead of creating a new one. A `201` status code is returned only when the flow was actually created; otherwise the existing flow is returned without error.
+
 ### Bulk flow deletion
 
 Bulk deleting flows will also hard-delete all associated deployments and their related data. This is a permanent, destructive operation that cannot be undone.
@@ -434,6 +438,19 @@ If an `idempotency_key` is supplied when creating a flow run, the server will us
 ### Concurrency slot cleanup on deletion
 
 Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+
+### Resuming a paused flow run
+
+Resuming a flow run only applies to runs in the `PAUSED` state. Attempts to resume a run that is not paused return an orchestration result with `status=ABORT` and a reason, rather than an HTTP error.
+
+When resuming a paused run, the behavior depends on the `pause_reschedule` flag in the state details:
+
+- If `pause_reschedule` is `true`, the run transitions to `Scheduled` (with `name='Resuming'` and `scheduled_time` set to now) instead of directly entering `Running`. This allows the run to be picked up by infrastructure again.
+- If `pause_reschedule` is `false` or unset, the run transitions directly to `Running`.
+
+### Run-input hydration and validation on resume
+
+If the paused state contains a `run_input_keyset`, any provided `run_input` is hydrated (template rendering with workspace variables) and validated against a stored JSON schema before the resume proceeds. Hydration or validation failures reject the resume with an orchestration result containing error details, rather than returning an HTTP error.
 
 ### Custom named states
 
