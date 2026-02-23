@@ -47,7 +47,7 @@ and then pass it to `create_markdown_artifact()` to create the artifact.
 
 ### Artifact keys and ArtifactCollection
 
-When an artifact is created with a non-null `key`, the server automatically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
+When an artifact is created with a non-null `key`, the server automatically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key. The server verifies that the collection's `latest_id` matches the newly created artifact after the upsert; failures in this verification path will surface as server-side errors and can cause artifact creation to fail even if the artifact row itself was inserted successfully.
 
 Artifacts created without a key are stored only in the `Artifact` table and will not appear in `/artifacts/latest` results, because they are not tracked in `ArtifactCollection`.
 
@@ -56,6 +56,10 @@ The `/artifacts/{key}/latest` endpoint only returns results for keys that were p
 ### Deleting the latest artifact
 
 Deleting the latest artifact for a key causes the `ArtifactCollection` to roll back its `latest_id` pointer to the next most recent artifact with the same key, ordered by creation time. If no other artifacts exist for that key, the `ArtifactCollection` entry is removed entirely.
+
+### Artifact key validation
+
+Artifact keys must only contain lowercase letters, numbers, and dashes (matching the pattern `^[a-z0-9-]*$`). Keys containing uppercase letters, underscores, or other characters will be rejected by server-side validation before the artifact is created.
 
 ### Metadata truncation
 
