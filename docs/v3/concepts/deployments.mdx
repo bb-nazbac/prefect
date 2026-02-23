@@ -151,7 +151,7 @@ class Deployment:
     concurrency_limit: int | None = None
     concurrency_options: ConcurrencyOptions(
         collision_strategy=Literal['ENQUEUE', 'CANCEL_NEW'],
-        grace_period_seconds=int  # 60-86400, default 300
+        grace_period_seconds=int  # 30-86400, default 300
     ) | None = None
 
     # metadata for bookkeeping
@@ -260,8 +260,8 @@ deployment can be active at once. To enable this behavior, deployments have the 
     - `ENQUEUE`: new runs transition to `AwaitingConcurrencySlot` and execute as slots become available.
     - `CANCEL_NEW`: new runs are canceled until a slot becomes available.
   - **`grace_period_seconds`**: the time in seconds to allow infrastructure to start before the concurrency
-  slot is released. This is useful for deployments with slow-starting infrastructure. Must be between 60 and
-  86400 seconds. If not set, falls back to the server setting (default 300 seconds / 5 minutes).
+  slot is released. This is useful for deployments with slow-starting infrastructure.  Must be between 30 and
+    86400 seconds.If not set, falls back to the server setting (default 300 seconds / 5 minutes).
 
 <CodeGroup>
 
@@ -360,3 +360,13 @@ configuration, and prepares the runtime environment for workflow execution.
 Pull steps allow users to highly decouple their workflow architecture.
 For example, a common use of pull steps is to dynamically pull code from remote filesystems such as
 GitHub with each run of their deployment.
+
+## Server-side behavior
+
+### Deployment upsert and scheduled runs
+
+Creating or upserting a deployment will delete any future auto-scheduled flow runs from the previous deployment version so that scheduled runs reflect the new configuration. This means that updating a deployment's schedule or other settings will clear previously auto-scheduled runs and allow the scheduler to recreate them based on the updated configuration.
+
+### Schedule slug requirements on update
+
+If an existing deployment's schedules have slugs, update requests must also include slugs for all provided schedules. Omitting slugs when the existing schedules have them will result in a `422` error to prevent accidental schedule replacement or deletion.
