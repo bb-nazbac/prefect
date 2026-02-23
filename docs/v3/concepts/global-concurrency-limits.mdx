@@ -160,6 +160,10 @@ When slot acquisition fails, the server increments `denied_slots` on the active 
 
 The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and enforces a range of 60–86400 seconds. Callers should not assume server-wide lease defaults apply to this endpoint.
 
+### Lease storage backend
+
+The `increment-with-lease` endpoint generates a lease that is persisted via the configured lease storage backend. The chosen backend (such as in-memory or filesystem) determines whether leases are visible across processes and survive server restarts. The storage module is selected by the server setting `server.concurrency.lease_storage`; that module must export a `ConcurrencyLeaseStorage` implementation or runtime errors will occur when creating or renewing leases.
+
 ### Idempotent lease release
 
 The `decrement-with-lease` endpoint is idempotent: calling it with a missing or already-revoked `lease_id` returns `204 No Content` and performs no slot changes.
