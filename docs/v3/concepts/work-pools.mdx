@@ -162,6 +162,38 @@ in waterfall fashion.
     Unpausing a work queue gives the work queue a `NOT_READY` status unless a worker has polled it in the last 60 seconds.
 </Tip>
 
+## Server-side behavior
+
+### Creation validates job template defaults
+
+Work pool creation validates `base_job_template` job-variable defaults, including resolving referenced block documents via `$ref`. If defaults are invalid or referenced blocks are missing, creation will fail with an error.
+
+### Default work queue
+
+Creating a work pool automatically creates a `default` work queue for the pool and sets the pool's `default_queue_id` accordingly. This queue cannot be deleted (see below).
+
+### Reserved pool names
+
+Work pools whose names begin with `Prefect` (case-insensitive) are reserved:
+
+- They can only be updated to change `is_paused` or `concurrency_limit`. Attempts to modify other fields return `403 Forbidden`.
+- They cannot be deleted via the API. Delete attempts return `403 Forbidden`.
+
+### Pausing and unpausing status transitions
+
+Changing a pool's `is_paused` flag triggers a status update:
+
+- **Pausing** sets the pool status to `PAUSED`.
+- **Unpausing** sets the status to `READY` if any workers are currently online, otherwise `NOT_READY`.
+
+### Default queue protection
+
+A work pool's default queue cannot be deleted. Attempts to delete it will fail with an error stating the default queue cannot be removed.
+
+### Worker heartbeat status transitions
+
+Receiving an online worker heartbeat can transition a `NOT_READY` work pool to `READY` and will emit a status-change event. This means a pool that was unpaused with no workers will automatically become ready when the first worker checks in.
+
 ## Further reading
 
 * Learn more about [workers](/v3/deploy/infrastructure-concepts/workers) and how they interact with work pools
