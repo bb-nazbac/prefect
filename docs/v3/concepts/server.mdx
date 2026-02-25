@@ -51,6 +51,14 @@ The server classifies certain database exceptions as client-retryable and return
 
 All other unhandled exceptions return `500 Internal Server Error`.
 
+## CSRF protection
+
+The CSRF token endpoint (`GET /api/csrf-token`) is controlled by the `PREFECT_SERVER_CSRF_PROTECTION_ENABLED` setting. When CSRF protection is disabled, the endpoint rejects requests with a 422 error and does not create tokens. When enabled, creating or updating a CSRF token also triggers cleanup of expired CSRF tokens in the same database session.
+
+## Readiness check
+
+The readiness endpoint (`GET /api/health`) actively checks database connectivity. If the database is not connectable, the endpoint returns 503 Service Unavailable. Readiness depends on database availability, not just process liveness.
+
 ## How to guides
 
 - [Self-host via CLI](/v3/how-to-guides/self-hosted/server-cli) - Start a local server instance

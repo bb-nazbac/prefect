@@ -429,11 +429,61 @@ Bulk deleting flows will also hard-delete all associated deployments and their r
 
 ### Flow run idempotency
 
-If an `idempotency_key` is supplied when creating a flow run, the server will use it to prevent duplicate flow runs and return the existing run instead of creating a new one. This is useful for ensuring that retried or duplicated API calls do not create unintended duplicate runs.
+If an `idempotency_key` is supplied when creating a flow run, the server will use it to prevent duplicate flow runs and return the existing run instead of creating a new one. When an existing run is returned, the state provided in the create request is not applied to it; initial state is only applied when the run is created by the current request.
+
+### System labels
+
+When creating a flow run, the server injects system labels (such as `prefect.flow.id` and, for deployment runs, `prefect.deployment.id`) and merges them with user-supplied labels. User labels override system ones.
+
+### Work pool and queue resolution
+
+Providing `work_pool_name` (and optional `work_queue_name`) during flow run creation causes the server to resolve and assign a `work_queue_id` using the named queue or the pool's default queue, rather than relying on client-provided queue IDs.
+
+### Updating job variables
+
+Updating `job_variables` on a flow run requires the run to be in the `SCHEDULED` state and to have an associated deployment. Job variables are validated against the deployment's work pool schema, and updates are rejected otherwise with a 400 error.
+
+### Average lateness
+
+The average lateness metric includes both runs that started late and runs that are past their expected start time but not yet started (not terminal). The latter contribute live wait time to the average, so values may change over time even without new events.
+
+### Flow run graph limits
+
+Retrieving a flow run's graph is subject to server-configured maximum node and artifact counts (`PREFECT_API_MAX_FLOW_RUN_GRAPH_NODES` and `PREFECT_API_MAX_FLOW_RUN_GRAPH_ARTIFACTS`). If the graph exceeds these limits, the server returns an error rather than partial results. The `since` parameter on graph-v2 enables incremental graph fetching by returning only nodes that started or ended after the provided time.
+
+### Resuming paused runs
+
+Resuming a paused flow run that expects run input hydrates and validates the input against a stored schema (with Jinja and workspace variable rendering). Validation or hydration failures result in orchestration-level REJECT responses. If the paused state had `pause_reschedule=true`, resume transitions the run to `SCHEDULED` (named "Resuming") instead of `RUNNING`.
+
+### Asynchronous log deletion
+
+Deleting a flow run schedules its logs for asynchronous deletion via a background docket task. Logs may remain briefly visible after the run is deleted.
+
+### Bulk operations
+
+Bulk delete operations are capped at 50 flow runs per request. If more runs match the filter, only the first 50 are deleted, and each deleted run's logs are scheduled for asynchronous cleanup.
+
+Bulk set-state applies transitions per-run sequentially with row-level locks (max 50 per request). The operation is not atomic: individual runs can succeed or fail independently, with per-run results returned.
+
+### Force flag and orchestration policies
+
+Using `force=True` on a state transition reduces the per-flow orchestration policy to a minimal policy but does not bypass global orchestration rules. Global policies are always enforced.
 
 ### Concurrency slot cleanup on deletion
 
-Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. The server only decrements active slots for deployment-associated runs that are in `PENDING`, `RUNNING`, or `CANCELLING` states and when the deployment defines a concurrency limit.
+
+### Flow run input
+
+Flow run input keys are unique per run. Attempting to create an input with an existing key returns HTTP 409 Conflict (no upsert). The input filter performs starts-with matching on keys, supports `exclude_keys`, returns results ordered by creation time (oldest first), and defaults to a single result unless `limit` is increased.
+
+### Log download
+
+The log-download endpoint streams logs as a CSV with columns `[timestamp, level, flow_run_id, task_run_id, message]` sorted by timestamp ascending, and names the file `{flow_run.name}-logs.csv`.
+
+### Label updates
+
+The labels `PATCH` endpoint merges provided labels into the existing set (overwriting same keys but preserving others). It does not remove labels and offers no delete-by-key capability.
 
 ### Custom named states
 

@@ -93,3 +93,33 @@ import { CLI } from "/snippets/resource-management/cli.mdx"
 import { TF } from "/snippets/resource-management/terraform.mdx"
 
 <TF name="variables" href={variables.tf} />
+
+## Server-side behavior
+
+### JSON size validation
+
+Variable values are validated against a maximum byte length (default 5000) using `orjson.dumps` serialization. Values exceeding this limit are rejected with a 422 response. The check is on the serialized byte length, not the raw string character count.
+
+### Name constraints
+
+Variable names must match the pattern `^[a-z0-9_]+$` (lowercase alphanumeric and underscores only) and not exceed 255 characters. Names that violate these constraints are rejected at the model validation level.
+
+### List endpoint default limit
+
+The `POST /api/variables/filter` endpoint defaults to returning up to 100 variables per request. Clients that do not supply a `limit` parameter receive at most 100 results.
+
+### Like-name filtering
+
+The variable filter supports `like_` name matching, which translates to a case-insensitive SQL `LIKE` query. This allows partial name matching with `%` wildcards.
+
+### Partial update (PATCH)
+
+`PATCH /api/variables/{id}` applies a partial update: only supplied fields are modified and the rest are preserved. An empty patch body is accepted and results in no changes.
+
+### Update by name
+
+`PUT /api/variables/name/{name}` updates a variable identified by name rather than ID. If no variable with that name exists, the endpoint returns 404.
+
+### Hard delete
+
+`DELETE /api/variables/{id}` permanently removes the variable. There is no soft-delete or trash mechanism; deleted variables cannot be recovered.

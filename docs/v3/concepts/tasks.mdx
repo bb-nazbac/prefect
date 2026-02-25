@@ -186,13 +186,37 @@ The server validates that the list of configured retry delays contains no more t
 
 `POST /api/task_runs` will return an existing task run instead of creating a new one if a run with the same `flow_run_id`, `task_key`, and `dynamic_key` already exists. The endpoint performs an idempotent upsert in that case.
 
+### System labels
+
+When creating a task run, the server injects system labels (such as `prefect.flow-run.id`) and merges them with any user-supplied labels.
+
 ### Background log deletion on task run removal
 
 The background log-deletion job scheduled by `DELETE /api/task_runs/{id}` will retry up to 5 times with 0.5-second delays and runs in its own database transaction.
 
+### Deferred task run creation
+
+Deferred task runs expect a `task_key` field and default to `PENDING` state rather than the standard `SCHEDULED`. These runs are associated with a deployment-like scheduling mechanism and are picked up by background workers.
+
+### Cache key handling
+
+When a task run transitions to `COMPLETED`, if a `cache_key` is present the server stores the cache entry keyed by that value. When transitioning to `RUNNING`, if a `cache_key` is present the server checks for a matching cache entry and, if found, short-circuits to `COMPLETED` with the cached state data, subject to `cache_expiration`.
+
+### Retry delay enforcement
+
+The retry delay orchestration rule reads `retry_delay` from the proposed state's `state_details` and, if present, issues a `WAIT` response for that duration rather than allowing immediate retry. This applies only when the proposed state is `AWAITINGRETRY`.
+
+### Concurrency limit enforcement
+
+If the task run specifies `concurrency_tag` values, the orchestration policy evaluates concurrency limits at transition time. If a limit is at capacity, the policy overrides the proposed state to `PENDING` and sets a 30-second delay before the next retry.
+
 ### WebSocket subscription requeue behavior
 
-During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
+During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking. After delivering a run, the endpoint transitions it to `RUNNING` before yielding it to the subscriber.
+
+### Requeue on force-scheduled
+
+`PUT /api/task_runs/{id}/set_state` with `force=True` and a `SCHEDULED` state will bypass most orchestration policies. Task runs returned to `SCHEDULED` this way can be picked up again by workers.
 
 ## Background tasks
 

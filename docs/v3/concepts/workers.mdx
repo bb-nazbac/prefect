@@ -105,6 +105,16 @@ after it stopped sending heartbeats, but you can configure the threshold with th
 
 Because the worker heartbeat uses upsert semantics (`INSERT ... ON CONFLICT DO UPDATE`), deleting a worker via the API does not permanently remove it. If the worker process is still running, its next heartbeat will recreate the worker record. To permanently remove a worker, stop the worker process first.
 
+Providing `heartbeat_interval_seconds` in a heartbeat updates the worker's stored heartbeat interval and influences subsequent `ONLINE`/`OFFLINE` calculations.
+
+#### Worker status computation
+
+Worker status in API responses is computed from `last_heartbeat_time` and `heartbeat_interval_seconds` (default 30s) using an inactivity multiplier of 3, not from a separate persisted status field. If a worker does not supply `heartbeat_interval_seconds`, the API uses the 30-second default and considers the worker offline after approximately 90 seconds of missed heartbeats.
+
+#### Heartbeat and work pool status
+
+Sending a worker heartbeat for a work pool in `NOT_READY` status will mark the work pool `READY` and emit a status change event. Heartbeats have a cross-resource side effect on the work pool's readiness.
+
 ### Worker logs
 <span class="badge cloud"></span> Workers send logs to the Prefect Cloud API if you're connected to Prefect Cloud.
 

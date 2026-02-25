@@ -612,7 +612,27 @@ Sequence triggers are defined as:
 
 ### Trigger ID behavior
 
-Creating an automation resets all trigger IDs server-side; any client-supplied trigger IDs are discarded and replaced with new server-generated UUIDs. Clients should not expect to control or preserve trigger IDs when creating or updating automations.
+Creating an automation resets all trigger IDs server-side; any client-supplied trigger IDs are discarded and replaced with new server-generated UUIDs. Updating an automation (via `PUT`) also resets trigger IDs. Clients should not expect to control or preserve trigger IDs when creating or updating automations.
+
+### Infinite loop prevention
+
+The server rejects automations that would cause infinite flow-run loops. A reactive trigger expecting flow-run events cannot include `RunDeployment` actions inferred from those flow runs (always rejected). Selected deployments require additional filtering (non-trivial `match` or `match_related`) to avoid loops. Automations that fail this check are rejected during model validation.
+
+### Proactive trigger minimum `within`
+
+For proactive event triggers, an omitted or zero `within` value is coerced to a minimum of 10 seconds server-side. Values explicitly set below 10 seconds are rejected.
+
+### Job variable validation on triggers
+
+When an automation includes `RunDeployment` actions with `job_variables`, the server validates those variables against the deployment's and work pool's job variable schema (resolving `$ref` defaults for block references). Validation failures result in a 422 response with error details. This validation applies to both creation and update requests.
+
+### Owner resource on creation
+
+If `owner_resource` is included when creating an automation, the server relates the created automation to that resource (marking it as owned) as part of the create operation. This ownership affects deletion semantics via the `owned-by` endpoint.
+
+### PATCH validation
+
+`PATCH` requests that produce an invalid resulting automation (after merging with the current state) will return a 422 response with model validation errors and the submitted body included.
 
 ### Support for event trigger types
 

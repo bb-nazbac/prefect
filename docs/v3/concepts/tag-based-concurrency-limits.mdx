@@ -44,6 +44,30 @@ Deleting a tag-based limit revokes all active leases associated with the limit (
 
 The increment handler uses lease-backed atomic acquisition for V2 limits but updates in-memory `active_slots` for legacy V1 limits. These two paths have different side-effect and durability semantics—callers should not assume identical behavior between versions.
 
+For V2 limits, the endpoint attempts atomic bulk acquisition via a DB update. If any requested V2 limit is at capacity, the call fails with 423 for that specific tag.
+
+For V1 limits, availability is determined by comparing the in-memory `active_slots` length to the configured concurrency limit. When at capacity, the endpoint returns 423 with a `Retry-After` header set from `PREFECT_TASK_RUN_TAG_CONCURRENCY_SLOT_WAIT_SECONDS`.
+
+### Zero-limit pre-check
+
+`POST /api/concurrency_limits/increment` rejects the request with 423 Locked if any requested tag has a concurrency limit of 0 (to avoid deadlock), without acquiring other tags' slots.
+
+### V2 active slots from lease storage
+
+`GET /api/concurrency_limits/tag/{tag}` computes the `active_slots` list by querying the lease storage for holders of the underlying V2 limit and filtering for `task_run` holders.
+
+### Merged filter results
+
+`POST /api/concurrency_limits/filter` returns a merged list of V2-converted and V1 limits, deduplicated by tag with V2 preferred. Pagination (`limit`/`offset`) is applied after merging and deduplication.
+
+### V1-format responses from V2 storage
+
+`GET /api/concurrency_limits/{id}` first resolves to the internal V2 limit (if present and named with prefix `tag:`) and maps it to a V1-format response. Otherwise it falls back to legacy V1 records.
+
+### Occupancy tracking on decrement
+
+`POST /api/concurrency_limits/decrement` updates `avg_slot_occupancy_seconds` for V2 limits when `occupancy_seconds` is supplied, using a weighted average over recent samples which influences decay and retry-after behavior.
+
 ## Use cases
 
 Tag-based concurrency limits are useful when you have tasks that interact with shared resources. For example:

@@ -221,3 +221,25 @@ Read more about [managing API keys](/v3/how-to-guides/cloud/manage-users/api-key
 
 - [`server.database.connection_url`](/v3/develop/settings-ref#connection-url): the database connection URL for a self-hosted Prefect server instance.
 Must be provided in a SQLAlchemy-compatible format. Prefect currently supports SQLite and Postgres.
+
+## Server-side behavior
+
+### Secret obfuscation in settings responses
+
+The `GET /api/admin/settings` response obfuscates secret-valued settings by default. Full secret values are only included when serialization is performed with `include_secrets=True`.
+
+### Post-validation computed settings
+
+Several settings are computed after validation (such as `ui_url`, `server.ui.api_url`, logging levels in debug/test modes, and the default database connection URL) and are treated as defaults (not user-set) in the Settings object. If the API URL indicates Prefect Cloud (`connected_to_cloud`), `logging.to_api.max_log_size` is capped at `cloud.max_log_size` to avoid exceeding Cloud limits.
+
+### Database connection URL requirements
+
+The computed default database connection URL depends on the selected driver. Choosing `postgresql+asyncpg` requires `host`, `user`, and `name` to be set, or Settings construction will raise a `ValueError`. Unsupported drivers also raise an error.
+
+### Profile selection precedence
+
+The active profile is selected in this order: CLI `--profile` flag, `PREFECT_PROFILE` environment variable, then the profiles file's `active` key. If the selected profile is missing, the `ephemeral` profile is used and a warning is emitted to stderr.
+
+### Profile loading
+
+Profiles are loaded by merging default built-in profiles with the user profiles file at the configured `profiles_path`. If `profiles_path` is unset, a `RuntimeError` is raised and user profiles are not available.
