@@ -111,6 +111,26 @@ The `WS /api/events/out` endpoint uses per-subscriber queues with a limited back
 
 The first client message after authentication must be a `filter` message (with `{"type": "filter", ...}`). Any other initial message will cause the server to close the WebSocket connection with a protocol error (`WS_1002_PROTOCOL_ERROR`).
 
+#### WebSocket backfill
+
+WebSocket backfill requests are limited to `PREFECT_EVENTS_MAXIMUM_WEBSOCKET_BACKFILL` (default: 15 minutes). The server clamps the filter's `occurred.since` value to this maximum and forces backfilled events to be emitted in ascending order regardless of the client's filter order. During backfill, the server deduplicates by event ID: events sent during backfill are recorded, and matching events from the live stream are suppressed to avoid duplicate delivery.
+
+#### WebSocket authentication
+
+When server API auth is configured, WebSocket clients must use the `prefect` subprotocol and send an initial `auth` message with a valid token. If auth is not configured, the server accepts legacy connections without the subprotocol. For the `prefect` subprotocol, clients must always send an `auth` message (even if no token is configured) to maintain Cloud compatibility.
+
+### Ephemeral event processing
+
+Requests identified as ephemeral are processed synchronously via an in-process `EventsPipeline` instead of being published to the messaging broker. This changes delivery and side-effect semantics compared to the normal publish path.
+
+### Event pagination
+
+Event pagination tokens are opaque base64-encoded JSON capturing filter and paging state. Malformed or tampered tokens will be rejected with HTTP 403 when requesting subsequent pages. The `/api/events/filter/next` endpoint requires a base64-encoded page token; empty tokens are also rejected with 403.
+
+### Time-based event counts
+
+Time-based event counts include zero-count buckets for empty intervals. Returned start and end times correspond to interval boundaries rather than exact event timestamps. The server enforces a minimum time interval of 0.01 and a maximum of 1000 buckets; requests violating these bounds are rejected with HTTP 422.
+
 ## Further reading
 
 - [How to create automations](/v3/how-to-guides/automations/creating-automations/)
