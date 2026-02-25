@@ -162,6 +162,62 @@ in waterfall fashion.
     Unpausing a work queue gives the work queue a `NOT_READY` status unless a worker has polled it in the last 60 seconds.
 </Tip>
 
+## Server-side behavior
+
+### Reserved pool names
+
+Work pool names starting with `Prefect` are reserved for internal use. Attempting to create or delete a reserved pool returns 403 Forbidden. Reserved pools may only be updated to change `is_paused` or `concurrency_limit`; other field updates are forbidden.
+
+### Default queue creation
+
+Creating a work pool automatically creates a `default` work queue and populates the pool's `default_queue_id` with its ID. Attempting to delete a pool's default queue is disallowed and returns an error.
+
+### Template validation on creation
+
+Pool creation validates `base_job_template` job variable defaults against the variables schema and will reject creation with 422 on validation errors. Referenced block documents in defaults must exist or the request returns 404.
+
+### Worker heartbeat and pool status
+
+Receiving a worker heartbeat for a work pool in `NOT_READY` status transitions the pool to `READY` and emits a status change event. Heartbeats have a cross-resource side effect on the work pool's readiness.
+
+### Heartbeat upsert semantics
+
+Heartbeat requests upsert the worker record (insert or update), setting `last_heartbeat_time` and status to `ONLINE`, and will persist a provided `heartbeat_interval_seconds`. Because heartbeats upsert, deleting a worker via the API only removes the DB record; a still-running worker will recreate its record on its next heartbeat.
+
+### Worker status computation
+
+Worker status in API responses is computed from `last_heartbeat_time` and `heartbeat_interval_seconds` (default 30s) using an inactivity multiplier of 3, not directly from a persisted status field. Workers are considered offline after approximately 90 seconds of missed heartbeats by default.
+
+### Polling side effects
+
+Calling `get_scheduled_flow_runs` triggers asynchronous side effects: polled queues have their `last_polled` updated and certain deployments and work queues may be transitioned to `READY` via background tasks. Requests with the `X-PREFECT-UI` header are treated as UI-only previews and do not trigger these side effects.
+
+### Queue omission defaults
+
+Omitting `work_queue_names` when polling for scheduled runs causes the endpoint to operate over all queues of the pool rather than an empty selection.
+
+### Pause and unpause behavior
+
+Pausing a work pool sets its status to `PAUSED`. Unpausing a work pool sets its status to `READY` only if the pool has online workers; otherwise it becomes `NOT_READY`. Status transitions record event IDs and timestamps.
+
+Updating a queue's `is_paused` field conditionally changes its status: unpausing sets `NOT_READY` unless `last_polled` is recent (within 60 seconds), in which case it becomes `READY`. Redundant pause/unpause operations do not emit status changes.
+
+### Deprecated filter-based queues
+
+Work queues with a deprecated filter follow a legacy retrieval path that enforces concurrency limits by counting running/pending runs. Behavior differs from non-filtered queues.
+
+### Queue health policy
+
+The work queue status endpoint evaluates queue health using a default policy (`maximum_late_runs=0` and `maximum_seconds_since_last_polled=60`) which may mark queues unhealthy if any late runs exist or polling is stale.
+
+### Default agent pool
+
+Omitting `work_pool_id` when creating a queue causes the API to associate the queue with (or create) the default agent pool `default-agent-pool`. Requesting the `default` queue may return the pool's precreated default queue.
+
+### Read queue by name
+
+Reading a queue by name prefers the default agent pool (`default-agent-pool`) when present to preserve migration compatibility. Lookup semantics differ depending on whether the default pool exists.
+
 ## Further reading
 
 * Learn more about [workers](/v3/deploy/infrastructure-concepts/workers) and how they interact with work pools
