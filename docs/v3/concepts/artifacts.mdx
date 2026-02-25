@@ -23,9 +23,9 @@ For example, add a description to signify why a piece of data is important.
 
 ## Artifact types
 
-There are five artifact types:
+There are five user-facing artifact kinds, corresponding to four internal server types (`markdown`, `table`, `progress`, and `image`):
 
-- links
+- links (stored internally as `markdown` type)
 - Markdown
 - progress
 - images
@@ -47,18 +47,32 @@ and then pass it to `create_markdown_artifact()` to create the artifact.
 
 ### Artifact keys and ArtifactCollection
 
-When an artifact is created with a non-null `key`, the server automatically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
+When an artifact is created with a non-null `key`, the server upserts an `ArtifactCollection` entry (setting `latest_id` to the new artifact) before inserting the `Artifact` row itself. If the upsert does not result in `ArtifactCollection.latest_id` matching the new artifact, the server raises an error. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
 
 Artifacts created without a key are stored only in the `Artifact` table and will not appear in `/artifacts/latest` results, because they are not tracked in `ArtifactCollection`.
 
-The `/artifacts/{key}/latest` endpoint only returns results for keys that were previously set via artifact creation; it depends on the `ArtifactCollection` being populated by the `POST /api/artifacts` endpoint.
+The `/artifacts/{key}/latest` endpoint only consults the `ArtifactCollection` table. If no `ArtifactCollection` entry exists for a key, the endpoint returns 404 and does not fall back to searching `Artifact` rows directly.
 
 ### Deleting the latest artifact
 
-Deleting the latest artifact for a key causes the `ArtifactCollection` to roll back its `latest_id` pointer to the next most recent artifact with the same key, ordered by creation time. If no other artifacts exist for that key, the `ArtifactCollection` entry is removed entirely.
+Deleting the latest artifact for a key causes the server to update `ArtifactCollection.latest_id` to the next-most-recent artifact (ordered by creation time) and copy that artifact's data, type, description, timestamps, and refs into the collection row. If no other artifacts exist for that key, the `ArtifactCollection` entry is removed entirely.
 
 ### Metadata truncation
 
-Artifact metadata values longer than 500 characters are silently truncated to 500 characters (with `...` appended) rather than rejected.
+Artifact metadata values longer than 500 characters are silently truncated per metadata key to 500 characters (with `...` appended) rather than causing a validation error.
+
+### Creating artifacts from result dicts
+
+When creating an artifact from a result dict via `ArtifactCreate.from_result`, keys named `artifact_key`, `artifact_type`, and `artifact_description` are consumed from the dict and mapped to the artifact's `key`, `type`, and `description` fields respectively.
+
+### Updating artifacts
+
+Patching an artifact will also update the corresponding `ArtifactCollection` entry if that artifact is currently the latest (`ArtifactCollection.latest_id` matches the artifact ID). The operation is considered successful if either the `Artifact` or `ArtifactCollection` row was updated.
+
+### Artifact filtering
+
+Artifact filtering applies flow and deployment criteria using `EXISTS` subqueries against `FlowRun` (joining to `Flow` or `Deployment` as necessary) rather than direct joins. This means related-resource filters are evaluated with `EXISTS` semantics.
+
+Filtering the latest-by-key artifacts applies analogous `EXISTS`-based filtering against `ArtifactCollection` rows, using subqueries against `FlowRun` and `TaskRun` when corresponding filters are supplied.
 
 For more information on how to create and use artifacts, see the [how to produce workflow artifacts](/v3/how-to-guides/workflows/artifacts/) guide.
