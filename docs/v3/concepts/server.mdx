@@ -51,6 +51,10 @@ The server classifies certain database exceptions as client-retryable and return
 
 All other unhandled exceptions return `500 Internal Server Error`.
 
+## Readiness endpoint
+
+The `GET /api/health` readiness endpoint actively checks database connectivity. If the database is not connectable, the endpoint returns `503 Service Unavailable`. This means readiness depends on database availability, not just process liveness.
+
 ## How to guides
 
 - [Self-host via CLI](/v3/how-to-guides/self-hosted/server-cli) - Start a local server instance
