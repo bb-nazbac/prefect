@@ -156,6 +156,8 @@ Concurrency limit names that do not exist are silently ignored during acquisitio
 
 When slot acquisition fails, the server increments `denied_slots` on the active limits in the request. This counter affects subsequent `Retry-After` calculations and decays over time. It is persisted even on failed acquisition attempts.
 
+For non-lease increment failures, the server may return `423 Locked` with a `Retry-After` header derived from the denial history, slot decay parameters, and jitter.
+
 ### Lease duration bounds
 
 The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and enforces a range of 60–86400 seconds. Callers should not assume server-wide lease defaults apply to this endpoint.

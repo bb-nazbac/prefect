@@ -93,3 +93,9 @@ import { CLI } from "/snippets/resource-management/cli.mdx"
 import { TF } from "/snippets/resource-management/terraform.mdx"
 
 <TF name="variables" href={variables.tf} />
+
+## Server-side behavior
+
+### Deletion is permanent
+
+Deleting a variable by name immediately removes the database row (hard delete). The endpoint returns `204 No Content` on success or `404 Not Found` if no variable with that name existed. There is no soft-delete or recovery mechanism.

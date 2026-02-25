@@ -431,9 +431,29 @@ Bulk deleting flows will also hard-delete all associated deployments and their r
 
 If an `idempotency_key` is supplied when creating a flow run, the server will use it to prevent duplicate flow runs and return the existing run instead of creating a new one. This is useful for ensuring that retried or duplicated API calls do not create unintended duplicate runs.
 
+If a flow run already exists for the given `flow_id` and `idempotency_key`, the server returns that run and does not apply the state provided in the create request. Initial state is only applied when the run is actually created by the current request.
+
 ### Concurrency slot cleanup on deletion
 
 Deleting a flow run associated with a deployment will release any allocated concurrency slots for that deployment, decrementing active slot counters. This ensures that concurrency limits are properly maintained even when flow runs are manually deleted.
+
+### Updating job variables
+
+Updating `job_variables` on a flow run requires the run to be in the `SCHEDULED` state and to have an associated deployment. Job variables are validated against the deployment's work pool schema, and updates are rejected otherwise.
+
+### Resuming a paused flow run
+
+Resuming a paused flow run that expects run input hydrates and validates the input against a stored schema (with Jinja and workspace variable rendering). Validation or hydration failures result in orchestration-level reject responses. If the paused state had `pause_reschedule=true`, resume transitions the run to `SCHEDULED` (named "Resuming") instead of `RUNNING`.
+
+### Bulk operations
+
+Bulk delete operations are capped at 50 flow runs per request. If more runs match the filter, only the first 50 are deleted and each deleted run's logs are scheduled for asynchronous cleanup. Callers must repeat requests to delete beyond the cap.
+
+Bulk set-state applies transitions per-run sequentially with row-level locks (max 50 per request). The operation is not atomic—individual runs can succeed or fail independently, with per-run results returned.
+
+### Label updates
+
+The labels `PATCH` endpoint merges provided labels into the existing set, overwriting same keys but preserving others. It does not remove labels and offers no delete-by-key capability.
 
 ### Custom named states
 

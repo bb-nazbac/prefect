@@ -34,15 +34,19 @@ Creating a tag-based concurrency limit for a tag that already exists updates the
 
 ### Reset behavior with slot override
 
-When resetting a tag via the reset endpoint, providing `slot_override` replaces active slots with long-TTL leases for the specified task run IDs. Omitting `slot_override` clears all slots for that tag.
+When resetting a tag via the reset endpoint, existing leases are revoked in batches. If `slot_override` is provided, the server then creates long-TTL leases (approximately 100 years) for each specified `task_run_id` while incrementing slot counts. Omitting `slot_override` clears all slots for that tag.
 
 ### Deletion revokes leases
 
 Deleting a tag-based limit revokes all active leases associated with the limit (in batches) before removing the underlying V2 limit. This immediately frees those slots, which may affect currently running task runs that hold them.
 
+### Zero-limit pre-check
+
+The increment endpoint (`POST /concurrency_limits/increment`) rejects the request with `423 Locked` if any requested tag has a concurrency limit of 0, to avoid deadlock. This check runs before any slot acquisition, so no other tags' slots are acquired.
+
 ### V1 and V2 semantics differ on increment
 
-The increment handler uses lease-backed atomic acquisition for V2 limits but updates in-memory `active_slots` for legacy V1 limits. These two paths have different side-effect and durability semantics—callers should not assume identical behavior between versions.
+The increment handler uses lease-backed atomic acquisition for V2 limits but updates in-memory `active_slots` for legacy V1 limits. For V2 limits, the increment attempts atomic bulk acquisition using a single DB update; if any requested V2 limit is at capacity, the call fails with `423 Locked` for that specific tag. These two paths have different side-effect and durability semantics—callers should not assume identical behavior between versions.
 
 ## Use cases
 
