@@ -111,6 +111,26 @@ On automation creation, any client-provided trigger IDs are reset to server-gene
 
 Full automation updates (via `PUT`) also reset any provided trigger IDs to new server-generated IDs. Clients should not rely on trigger IDs remaining stable across updates.
 
+### Job variable validation
+
+When creating or updating an automation with a `RunDeployment` action that includes `job_variables` and a `deployment_id`, the server validates those variables against the target deployment's job variable schema. Validation failures are aggregated and cause the request to be rejected with a 422 response.
+
+### Owner resource linking
+
+If `owner_resource` is supplied when creating an automation, the server creates a related-resource entry marking the automation as owned by that resource. This affects related-to and owned-by query semantics and deletion behavior.
+
+### Related-resource synchronization
+
+The server keeps automation related-resource entries in sync for selected `RunDeployment` actions: on full updates (`PUT`), it removes non-owned deployment relations and inserts current selected deployments as related resources (`prefect.deployment.{id}`). This synchronization does not occur for partial updates (`PATCH`).
+
+### Partial update (PATCH) behavior
+
+`PATCH` applies partial updates by merging them with the current automation and validating the resulting object. A partial payload may be rejected if the merged result violates model constraints. Unlike full `PUT` updates, `PATCH` does not trigger related-resource synchronization or trigger ID reset.
+
+### Owned-by deletion timing
+
+The owned-by deletion endpoint (`DELETE /api/automations/owned-by/{resource_id}`) deletes only automations owned by the specified resource that were created before the deletion request timestamp. Concurrent or later creations are not removed.
+
 ## Sending notifications with automations
 
 
