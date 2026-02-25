@@ -194,6 +194,18 @@ The background log-deletion job scheduled by `DELETE /api/task_runs/{id}` will r
 
 During WebSocket task subscription (`WS /api/task_runs/subscriptions/scheduled`), if a worker fails to acknowledge a dispatched task properly or disconnects during send, the task is requeued into the retry queue and the worker is removed from active tracking.
 
+### State transition orchestration
+
+State transitions submitted via `set_state` are evaluated by orchestration policies that can modify, reject, delay, or replace the requested state. Pass `force=True` to bypass standard orchestration rules and apply a minimal policy instead.
+
+### Cache-based state replacement
+
+When a proposed `RUNNING` state includes a `cache_key` (and `refresh_cache` is false), the server may return a cached `COMPLETED` state instead of allowing execution. The cached state is returned with the name "Cached," causing the client to adopt the cached result rather than executing the task.
+
+### Tag-based concurrency enforcement
+
+Tag-based concurrency limits are enforced when a task run transitions to `RUNNING`. If any tag's limit is reached, the transition is delayed; limits set to zero abort the transition entirely. For V2 limits, lease acquisition and release mechanisms are used when configured.
+
 ## Background tasks
 
 Background tasks are an alternate task execution model where tasks are submitted in a non-blocking manner by one process and executed by a pool of processes. This execution model is particularly valuable for web applications and workflows that need to dispatch heavy or long-running work without waiting for completion to dedicated, horizontally scaled infrastructure.
