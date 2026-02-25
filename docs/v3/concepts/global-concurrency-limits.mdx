@@ -58,7 +58,7 @@ If the countdown concludes before the lease has been renewed, the concurrency sl
 
 Lease expiration typically occurs when a process occupying a slot exits unexpectedly and is unable to notify the server that the slot should be released. This system exists to ensure that all concurrency slots are eventually released to prevent concurrency-related deadlocks.
 
-The default lease duration is 5 minutes, but custom durations with a minimum of 1 minute can be supplied to the concurrency context manager.
+The default lease duration is 5 minutes. The `increment-with-lease` endpoint accepts lease durations between 45 and 86,400 seconds (1 day). Custom durations can be supplied to the concurrency context manager.
 
 **Lease renewal failures and strict mode**
 
@@ -158,10 +158,26 @@ When slot acquisition fails, the server increments `denied_slots` on the active 
 
 ### Lease duration bounds
 
-The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and enforces a range of 60–86400 seconds. Callers should not assume server-wide lease defaults apply to this endpoint.
+The `increment-with-lease` endpoint defaults `lease_duration` to 300 seconds and enforces a range of 45–86,400 seconds. The lease is persisted using the configured lease storage backend (`server.concurrency.lease_storage`), so lease durability and semantics depend on that backend configuration.
 
 ### Idempotent lease release
 
-The `decrement-with-lease` endpoint is idempotent: calling it with a missing or already-revoked `lease_id` returns `204 No Content` and performs no slot changes.
+The `decrement-with-lease` endpoint is idempotent: calling it with a missing or already-revoked `lease_id` returns `204 No Content` and performs no slot changes. When releasing a valid lease, the server computes `occupancy_seconds` from the lease lifetime and updates `avg_slot_occupancy_seconds` for affected limits, influencing future wait estimations.
+
+### Non-lease increment failures
+
+Non-lease increment failures (`POST /api/v2/concurrency_limits/increment`) increment `denied_slots` on active limits and may return 423 Locked with a `Retry-After` header derived from denial history, decay parameters, and jitter.
+
+### Rate limit mode validation
+
+When `mode='rate_limit'`, the endpoint rejects limits with `slot_decay_per_second == 0.0` (returns 422). Only limits with decay configured can be used for rate limiting.
+
+### Slot capacity validation
+
+Slot acquisition fails with 422 if the requested number of slots exceeds any active limit's configured capacity.
+
+### Lease renewal
+
+The `renew_lease` endpoint accepts `True`, `False`, or `None` from the lease backend's `renew_lease` method. A `None` return is treated as a legacy response, and the server checks lease existence to determine the outcome. If the lease is missing, the endpoint returns 410 Gone.
 
 For practical implementation examples, see [how to apply global concurrency and rate limits](/v3/how-to-guides/workflows/global-concurrency-limits).
