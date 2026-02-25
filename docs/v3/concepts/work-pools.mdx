@@ -162,6 +162,32 @@ in waterfall fashion.
     Unpausing a work queue gives the work queue a `NOT_READY` status unless a worker has polled it in the last 60 seconds.
 </Tip>
 
+## Server-side behavior
+
+### Worker heartbeat transitions pool status
+
+Calling the worker heartbeat endpoint may change the work pool's status from `NOT_READY` to `READY` when a heartbeat is received for a pool that was previously not ready.
+
+### Polling side effects
+
+Calling `get_scheduled_flow_runs` triggers asynchronous side effects: polled queues have their `last_polled` updated, and certain deployments and work queues may be transitioned to `READY` via background tasks.
+
+### Default queue cannot be deleted
+
+Deleting a queue that is a pool's default queue is disallowed. The API surfaces this as an error indicating the default queue cannot be deleted.
+
+### Reserved pool names
+
+Work pools whose names start with `Prefect` are reserved and cannot be deleted via the API (returns `403 Forbidden`).
+
+### Job template validation on creation
+
+Pool creation validates `base_job_template` job variable defaults and rejects creation with `422` on validation errors. Referenced block documents in defaults must exist or a `404` is returned.
+
+### Unpause status depends on online workers
+
+Unpausing a work pool sets its status to `READY` only if the pool has online workers; otherwise it becomes `NOT_READY`. Status transitions record event IDs and timestamps.
+
 ## Further reading
 
 * Learn more about [workers](/v3/deploy/infrastructure-concepts/workers) and how they interact with work pools
