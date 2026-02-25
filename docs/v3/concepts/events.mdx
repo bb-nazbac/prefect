@@ -109,7 +109,9 @@ Events larger than `PREFECT_EVENTS_MAXIMUM_SIZE_BYTES` are not published and are
 
 The `WS /api/events/out` endpoint uses per-subscriber queues with a limited backlog (`SUBSCRIPTION_BACKLOG=256`). If a subscriber's queue is full, subsequent events are dropped for that subscriber rather than blocking or closing the connection. Slow subscribers can lose events without notification.
 
-The first client message after authentication must be a `filter` message (with `{"type": "filter", ...}`). Any other initial message will cause the server to close the WebSocket connection with a protocol error (`WS_1002_PROTOCOL_ERROR`).
+WebSocket backfill (historical event replay on reconnection) is capped by the `PREFECT_EVENTS_MAXIMUM_WEBSOCKET_BACKFILL` setting, which defaults to 15 minutes — not 256 events. This setting controls how far back the server looks when backfilling events for a new subscriber.
+
+When using the `prefect` WebSocket subprotocol, clients must send an initial `auth` message. If the server has an auth token configured, the provided token must match or the connection is closed with `WS_1008_POLICY_VIOLATION`. After successful authentication, the first subsequent message must be a `filter` message (with `{"type": "filter", ...}`). Any other message will cause the server to close the WebSocket connection with a protocol error (`WS_1002_PROTOCOL_ERROR`).
 
 ## Further reading
 

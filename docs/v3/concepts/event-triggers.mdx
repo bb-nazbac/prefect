@@ -610,6 +610,10 @@ Sequence triggers are defined as:
 | **within**   | time, in seconds        | How close in time the child triggers must fire for this trigger to fire |
 | **triggers** | array of other triggers |                                                                         |
 
+### Infinite loop prevention
+
+The server rejects automations that would cause infinite flow-run loops. Specifically, a reactive trigger expecting flow-run events cannot include `RunDeployment` actions inferred from those flow runs. When the deployment source is "selected," the trigger must include sufficient filtering (via `match` or `match_related`) to avoid a cycle. Automations that fail this validation are rejected during creation with an error.
+
 ### Trigger ID behavior
 
 Creating an automation resets all trigger IDs server-side; any client-supplied trigger IDs are discarded and replaced with new server-generated UUIDs. Clients should not expect to control or preserve trigger IDs when creating or updating automations.

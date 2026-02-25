@@ -221,3 +221,13 @@ Read more about [managing API keys](/v3/how-to-guides/cloud/manage-users/api-key
 
 - [`server.database.connection_url`](/v3/develop/settings-ref#connection-url): the database connection URL for a self-hosted Prefect server instance.
 Must be provided in a SQLAlchemy-compatible format. Prefect currently supports SQLite and Postgres.
+
+## Server-side behavior
+
+### Cloud log size capping
+
+If the API URL indicates Prefect Cloud (`connected_to_cloud`), `logging.to_api.max_log_size` is automatically capped at `cloud.max_log_size` to avoid exceeding Cloud limits. This adjustment happens transparently during settings resolution.
+
+### Database connection URL validation
+
+The computed default database connection URL depends on the selected driver. Choosing `postgresql+asyncpg` requires `host`, `user`, and `name` to be set, or settings construction raises a `ValueError` listing the missing fields. Unsupported drivers also raise a `ValueError`.
