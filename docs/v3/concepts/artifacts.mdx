@@ -23,13 +23,17 @@ For example, add a description to signify why a piece of data is important.
 
 ## Artifact types
 
-There are five artifact types:
+There are five artifact creation methods:
 
-- links
+- links (stored as `markdown` type on the server)
 - Markdown
 - progress
 - images
 - tables
+
+<Note>
+Link artifacts are rendered as Markdown links and stored with the `markdown` type. The four distinct server-side artifact types are: `markdown`, `table`, `progress`, and `image`.
+</Note>
 
 <Note> 
 Each artifact created within a task is displayed individually in the Prefect UI.
@@ -47,15 +51,19 @@ and then pass it to `create_markdown_artifact()` to create the artifact.
 
 ### Artifact keys and ArtifactCollection
 
-When an artifact is created with a non-null `key`, the server automatically inserts or updates an `ArtifactCollection` entry to track this artifact as the latest version for that key. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
+When an artifact is created with a non-null `key`, the server upserts an `ArtifactCollection` entry (setting `latest_id` to the new artifact) before inserting the `Artifact` row. After the upsert, the server verifies that `ArtifactCollection.latest_id` matches the new artifact ID and raises an error if it does not. This means each key has a "latest" pointer that is updated whenever a new artifact is created with that key.
 
 Artifacts created without a key are stored only in the `Artifact` table and will not appear in `/artifacts/latest` results, because they are not tracked in `ArtifactCollection`.
 
-The `/artifacts/{key}/latest` endpoint only returns results for keys that were previously set via artifact creation; it depends on the `ArtifactCollection` being populated by the `POST /api/artifacts` endpoint.
+The `/artifacts/{key}/latest` endpoint only consults the `ArtifactCollection` table. If no `ArtifactCollection` entry exists for a key, the endpoint returns 404 and does not fall back to searching `Artifact` rows directly.
+
+### Patching an artifact
+
+Patching an artifact also updates the corresponding `ArtifactCollection` entry if that artifact is currently the latest (`ArtifactCollection.latest_id` matches the artifact ID). The operation is considered successful if either the `Artifact` or `ArtifactCollection` row was updated.
 
 ### Deleting the latest artifact
 
-Deleting the latest artifact for a key causes the `ArtifactCollection` to roll back its `latest_id` pointer to the next most recent artifact with the same key, ordered by creation time. If no other artifacts exist for that key, the `ArtifactCollection` entry is removed entirely.
+Deleting the latest artifact for a key causes the `ArtifactCollection` to roll back its `latest_id` pointer to the next most recent artifact with the same key (ordered by creation time), and copies that artifact's data, type, description, timestamps, and references into the `ArtifactCollection` row. If no other artifacts exist for that key, the `ArtifactCollection` entry is removed entirely.
 
 ### Metadata truncation
 
